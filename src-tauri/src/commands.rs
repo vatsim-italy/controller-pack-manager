@@ -1,4 +1,6 @@
 use crate::app::Profile;
+use crate::utils;
+use crate::utils::{clear_directory, copy_dir_all};
 use crate::AppState;
 use serde::Deserialize;
 use std::env;
@@ -85,66 +87,9 @@ fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result<(),
     })
 }
 
-fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), String> {
-    fs::create_dir_all(destination).map_err(|error| {
-        format!(
-            "unable to create destination directory '{}': {}",
-            destination.display(),
-            error
-        )
-    })?;
-
-    for entry in fs::read_dir(source).map_err(|error| {
-        format!(
-            "unable to read source directory '{}': {}",
-            source.display(),
-            error
-        )
-    })? {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if should_skip_release_entry(&name) {
-            continue;
-        }
-
-        let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
-
-        if source_path.is_dir() {
-            copy_dir_all(&source_path, &destination_path)?;
-        } else {
-            fs::copy(&source_path, &destination_path).map_err(|error| {
-                format!(
-                    "unable to copy '{}' to '{}': {}",
-                    source_path.display(),
-                    destination_path.display(),
-                    error
-                )
-            })?;
-        }
-    }
-
-    Ok(())
-}
-
-fn should_skip_release_entry(name: &str) -> bool {
-    name.eq_ignore_ascii_case("ignore") || name.eq_ignore_ascii_case("crc_checksums.txt")
-}
-
 fn extension_is(path: &Path, extension: &str) -> bool {
     path.extension()
         .is_some_and(|value| value.eq_ignore_ascii_case(extension))
-}
-
-fn clear_directory(path: &Path) -> Result<(), String> {
-    if path.exists() {
-        fs::remove_dir_all(path).map_err(|error| {
-            format!("unable to clear directory '{}': {}", path.display(), error)
-        })?;
-    }
-
-    fs::create_dir_all(path)
-        .map_err(|error| format!("unable to create directory '{}': {}", path.display(), error))
 }
 
 fn download_and_extract_latest_release(download_folder: &Path) -> Result<(), String> {
@@ -314,7 +259,7 @@ fn copy_release_content(
         let file_name = entry.file_name();
         let file_name_str = file_name.to_string_lossy().to_string();
 
-        if should_skip_release_entry(&file_name_str) {
+        if utils::should_skip_release_entry(&file_name_str) {
             continue;
         }
 
@@ -374,56 +319,6 @@ fn patch_hoppie_code(euroscope_config_path: &Path, hoppie_code: &str) -> Result<
     })
 }
 
-#[tauri::command]
-pub fn get_detected_euroscope_config_dir(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<String>, String> {
-    let lock = state
-        .euroscope_config_dir
-        .lock()
-        .map_err(|error| error.to_string())?;
-    Ok(lock.clone())
-}
-
-#[tauri::command]
-pub fn get_detected_installed_airac_version(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<String>, String> {
-    let lock = state
-        .installed_airac_version
-        .lock()
-        .map_err(|error| error.to_string())?;
-    Ok(lock.clone())
-}
-
-#[tauri::command]
-pub fn is_new_airac_version_available(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<bool>, String> {
-    let lock = state
-        .new_airac_version_available
-        .lock()
-        .map_err(|error| error.to_string())?;
-    Ok(lock.clone())
-}
-
-#[tauri::command]
-pub fn get_existing_profiles(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<Vec<Profile>>, String> {
-    let lock = state.profiles.lock().map_err(|error| error.to_string())?;
-    Ok(lock.clone())
-}
-
-#[tauri::command]
-pub fn get_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
-    let lock = state
-        .hoppie_code
-        .lock()
-        .map_err(|error| error.to_string())?;
-    Ok(lock.clone())
-}
-
 fn run_update_airac_version(
     euroscope_config_dir: String,
     existing_profiles: Vec<Profile>,
@@ -477,6 +372,56 @@ fn run_update_airac_version(
     })?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_detected_euroscope_config_dir(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let lock = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(lock.clone())
+}
+
+#[tauri::command]
+pub fn get_detected_installed_airac_version(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let lock = state
+        .installed_airac_version
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(lock.clone())
+}
+
+#[tauri::command]
+pub fn is_new_airac_version_available(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<bool>, String> {
+    let lock = state
+        .new_airac_version_available
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(lock.clone())
+}
+
+#[tauri::command]
+pub fn get_existing_profiles(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<Vec<Profile>>, String> {
+    let lock = state.profiles.lock().map_err(|error| error.to_string())?;
+    Ok(lock.clone())
+}
+
+#[tauri::command]
+pub fn get_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    let lock = state
+        .hoppie_code
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(lock.clone())
 }
 
 #[tauri::command]

@@ -1,5 +1,6 @@
 mod app;
 mod commands;
+mod utils;
 
 use app::AppState;
 use commands::*;

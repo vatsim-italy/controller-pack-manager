@@ -1,5 +1,6 @@
 import { Profile } from "./main";
 import { invoke } from "@tauri-apps/api/core";
+import { useState } from "react";
 
 type AppProps = {
     euroscopeConfigPath: string | null;
@@ -20,8 +21,25 @@ function App(
         startupError
     }: AppProps
 ) {
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [updateError, setUpdateError] = useState<string | null>(null);
+    const [updateSuccess, setUpdateSuccess] = useState(false);
+
     const updateAirac = async () => {
-        await invoke("update_airac_version");
+        setIsUpdating(true);
+        setUpdateError(null);
+        setUpdateSuccess(false);
+
+        try {
+            await invoke("update_airac_version");
+            setUpdateSuccess(true);
+            setTimeout(() => setUpdateSuccess(false), 3000);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setUpdateError(errorMessage);
+        } finally {
+            setIsUpdating(false);
+        }
     };
 
     return (
@@ -42,7 +60,18 @@ function App(
             {!startupError && !installedAiracVersion && (
                 <p>No AIRAC release installation was found in %APPDATA%\EuroScope\LIXX.</p>
             )}
-            <button disabled={!newAiracVersionAvailable} onClick={updateAirac}>Update</button>
+            <button
+                disabled={!newAiracVersionAvailable || isUpdating}
+                onClick={updateAirac}
+            >
+                {isUpdating ? "Updating..." : "Update"}
+            </button>
+            {updateError && (
+                <p style={{ color: "red", marginTop: "10px" }}>Update failed: {updateError}</p>
+            )}
+            {updateSuccess && (
+                <p style={{ color: "green", marginTop: "10px" }}>Update completed successfully!</p>
+            )}
 
             <h2>Profiles</h2>
             {
