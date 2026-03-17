@@ -1,3 +1,4 @@
+use core::fmt;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -231,7 +232,7 @@ impl AppState {
                 let path = entry.path();
 
                 if path.is_file() && path.extension()? == "prf" {
-                    Some(path.to_string_lossy().into_owned())
+                    Some(path.file_name().unwrap().to_string_lossy().into_owned())
                 } else {
                     None
                 }
@@ -242,8 +243,10 @@ impl AppState {
             existing_profiles
                 .iter()
                 .map(|profile_path| {
-                    let profile_content = std::fs::read_to_string(profile_path)
-                        .expect("we checked before that this file exists");
+                    let profile_content = std::fs::read_to_string(
+                        PathBuf::from(euroscope_config_dir).join(profile_path),
+                    )
+                    .expect("we checked before that this file exists");
                     Profile::parse(profile_path, profile_content)
                 })
                 .collect(),

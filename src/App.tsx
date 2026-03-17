@@ -1,5 +1,5 @@
-import "./App.css";
 import { Profile } from "./main";
+import { invoke } from "@tauri-apps/api/core";
 
 type AppProps = {
     euroscopeConfigPath: string | null;
@@ -20,6 +20,10 @@ function App(
         startupError
     }: AppProps
 ) {
+    const updateAirac = async () => {
+        await invoke("update_airac_version");
+    };
+
     return (
         <main className="container">
             <h1>Controller Pack Manager</h1>
@@ -38,7 +42,7 @@ function App(
             {!startupError && !installedAiracVersion && (
                 <p>No AIRAC release installation was found in %APPDATA%\EuroScope\LIXX.</p>
             )}
-            <button disabled={!newAiracVersionAvailable}>Update</button>
+            <button disabled={!newAiracVersionAvailable} onClick={updateAirac}>Update</button>
 
             <h2>Profiles</h2>
             {
