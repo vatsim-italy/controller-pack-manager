@@ -1,6 +1,6 @@
 import { Profile } from "./main";
 import { Layout } from "./components/Layout";
-import { ConfigSection } from "./components/ConfigSection";
+import { PluginSection } from "./components/PluginSection";
 import { AiracSection } from "./components/AiracSection";
 import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
@@ -11,6 +11,7 @@ export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky";
 type AppProps = {
     euroscopeConfigPath: string | null;
     installedAiracVersion: string | null;
+    installedPluginVersion: string | null;
     newAiracVersionAvailable: boolean | null;
     profiles: Profile[] | null;
     hoppieCode: string | null;
@@ -21,6 +22,7 @@ function App(
     {
         euroscopeConfigPath,
         installedAiracVersion,
+        installedPluginVersion,
         newAiracVersionAvailable,
         profiles,
         hoppieCode,
@@ -36,8 +38,8 @@ function App(
                 subtitle: "Manage AIRAC updates for your local EuroScope sector files.",
             },
             plugin: {
-                title: "Plugin Manager",
-                subtitle: "Check your EuroScope installation path and plugin setup.",
+                title: "VATITA Controller Plugin",
+                subtitle: "Manage and update the VATITA plugin for EuroScope.",
             },
             profiles: {
                 title: "Profiles",
@@ -65,8 +67,9 @@ function App(
 
         if (activeSection === "plugin") {
             return (
-                <ConfigSection
-                    euroscopeConfigPath={euroscopeConfigPath}
+                <PluginSection
+                    installedAiracVersion={installedAiracVersion}
+                    installedPluginVersion={installedPluginVersion}
                     startupError={startupError}
                 />
             );
@@ -92,6 +95,13 @@ function App(
                         {activeSection === "sector-file" && (
                             <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
                                 AIRAC {installedAiracVersion ?? "unknown"}
+                            </span>
+                        )}
+                        {activeSection === "plugin" && (
+                            <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
+                                {installedPluginVersion
+                                    ? `${installedPluginVersion}`
+                                    : `AIRAC ${installedAiracVersion ?? "unknown"}`}
                             </span>
                         )}
                     </div>

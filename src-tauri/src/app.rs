@@ -1,3 +1,4 @@
+use crate::config::ensure_config_file;
 use crate::profile::Profile;
 use std::env;
 use std::fs;
@@ -5,16 +6,11 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
     tag_name: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ControllerPackManagerConfig {
-    installed_airac_version: String,
 }
 
 #[derive(Debug)]
@@ -41,7 +37,7 @@ impl AppState {
             .as_deref()
             .and_then(Self::parse_hoppie_code);
 
-        Self::create_config_file_if_missing(detected_installed_airac_version.as_deref());
+        let _ = ensure_config_file(detected_installed_airac_version.as_deref());
 
         let new_airac_version_available = detected_installed_airac_version
             .as_deref()
@@ -54,37 +50,6 @@ impl AppState {
             profiles: Mutex::new(profiles),
             hoppie_code: Mutex::new(hoppie_code),
         }
-    }
-
-    fn create_config_file_if_missing(installed_airac_version: Option<&str>) {
-        let Some(installed_airac_version) = installed_airac_version else {
-            return;
-        };
-
-        let Ok(app_data) = env::var("APPDATA") else {
-            return;
-        };
-
-        let config_dir = PathBuf::from(app_data).join("controller-pack-manager");
-        let config_file = config_dir.join("config.json");
-
-        if config_file.exists() {
-            return;
-        }
-
-        if fs::create_dir_all(&config_dir).is_err() {
-            return;
-        }
-
-        let config = ControllerPackManagerConfig {
-            installed_airac_version: installed_airac_version.to_string(),
-        };
-
-        let Ok(serialized_config) = serde_json::to_string_pretty(&config) else {
-            return;
-        };
-
-        let _ = fs::write(config_file, serialized_config);
     }
 
     fn detect_euroscope_config_folder() -> Option<String> {

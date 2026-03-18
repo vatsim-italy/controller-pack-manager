@@ -1,4 +1,12 @@
 use crate::airac::{run_get_latest_airac_changelog, run_update_airac_version};
+use crate::github_http::{clear_stored_github_token, resolve_github_token, store_github_token};
+use crate::plugin::{
+    get_installed_plugin_version as read_installed_plugin_version,
+    get_latest_plugin_installable_version as read_latest_plugin_installable_version,
+    get_plugin_dev_releases_opt_in as read_plugin_dev_releases_opt_in,
+    run_get_latest_plugin_changelog, run_update_plugin_version,
+    set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
+};
 use crate::profile::{delete_profile_and_reload, update_profile_and_reload, Profile};
 use crate::AppState;
 
@@ -89,6 +97,55 @@ pub async fn get_latest_airac_changelog() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(run_get_latest_airac_changelog)
         .await
         .map_err(|error| format!("changelog task failed: {}", error))?
+}
+
+#[tauri::command]
+pub async fn get_latest_plugin_changelog() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(run_get_latest_plugin_changelog)
+        .await
+        .map_err(|error| format!("plugin changelog task failed: {}", error))?
+}
+
+#[tauri::command]
+pub async fn update_plugin_version() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(run_update_plugin_version)
+        .await
+        .map_err(|error| format!("plugin update task failed: {}", error))?
+}
+
+#[tauri::command]
+pub fn set_github_access_token(token: String) -> Result<(), String> {
+    store_github_token(&token)
+}
+
+#[tauri::command]
+pub fn clear_github_access_token() -> Result<(), String> {
+    clear_stored_github_token()
+}
+
+#[tauri::command]
+pub fn has_github_access_token() -> Result<bool, String> {
+    Ok(resolve_github_token().is_some())
+}
+
+#[tauri::command]
+pub fn is_plugin_dev_releases_opted_in() -> Result<bool, String> {
+    read_plugin_dev_releases_opt_in()
+}
+
+#[tauri::command]
+pub fn set_plugin_dev_releases_opt_in_command(opt_in: bool) -> Result<(), String> {
+    write_plugin_dev_releases_opt_in(opt_in)
+}
+
+#[tauri::command]
+pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
+    read_installed_plugin_version()
+}
+
+#[tauri::command]
+pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String> {
+    read_latest_plugin_installable_version()
 }
 
 #[tauri::command]

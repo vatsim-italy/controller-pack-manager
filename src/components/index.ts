@@ -2,6 +2,7 @@ export { Layout } from "./Layout";
 export { Header } from "./Header";
 export { ErrorBoundary } from "./ErrorBoundary";
 export { ConfigSection } from "./ConfigSection";
+export { PluginSection } from "./PluginSection";
 export { AiracSection } from "./AiracSection";
 export { ProfilesList } from "./ProfilesList";
 export { HoppieSection } from "./HoppieSection";

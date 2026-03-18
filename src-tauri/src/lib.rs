@@ -1,6 +1,8 @@
 mod airac;
 mod app;
 mod commands;
+mod config;
+mod github_http;
 mod plugin;
 mod profile;
 mod topsky;
@@ -22,6 +24,15 @@ pub fn run() {
             get_hoppie_code,
             update_airac_version,
             get_latest_airac_changelog,
+            update_plugin_version,
+            get_latest_plugin_changelog,
+            set_github_access_token,
+            clear_github_access_token,
+            has_github_access_token,
+            is_plugin_dev_releases_opted_in,
+            set_plugin_dev_releases_opt_in_command,
+            get_installed_plugin_version,
+            get_latest_plugin_installable_version,
             update_profile,
             delete_profile,
         ])

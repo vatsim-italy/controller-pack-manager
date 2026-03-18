@@ -1,7 +1,7 @@
+use crate::github_http::{download_bytes, fetch_latest_release};
 use crate::profile::{patch_profile_file, Profile};
 use crate::topsky::patch_hoppie_code;
 use crate::utils::{clear_directory, copy_dir_all, should_skip_release_entry};
-use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::io;
@@ -10,44 +10,10 @@ use std::path::{Path, PathBuf};
 const LATEST_RELEASE_API_URL: &str =
     "https://api.github.com/repos/vatsim-italy/VATITA-GNG-Files/releases/latest";
 
-#[derive(Debug, Deserialize)]
-struct GitHubReleaseAsset {
-    name: String,
-    browser_download_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct GitHubRelease {
-    zipball_url: String,
-    assets: Vec<GitHubReleaseAsset>,
-    body: String,
-}
-
-fn fetch_latest_release() -> Result<GitHubRelease, String> {
-    let client = reqwest::blocking::Client::builder()
-        .build()
-        .map_err(|error| format!("unable to create http client: {}", error))?;
-
-    client
-        .get(LATEST_RELEASE_API_URL)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "controller-pack-manager")
-        .send()
-        .map_err(|error| format!("unable to fetch latest release: {}", error))?
-        .error_for_status()
-        .map_err(|error| format!("latest release request failed: {}", error))?
-        .json::<GitHubRelease>()
-        .map_err(|error| format!("unable to parse latest release payload: {}", error))
-}
-
 fn download_and_extract_latest_release(download_folder: &Path) -> Result<String, String> {
     clear_directory(download_folder)?;
 
-    let release = fetch_latest_release()?;
-
-    let client = reqwest::blocking::Client::builder()
-        .build()
-        .map_err(|error| format!("unable to create http client: {}", error))?;
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
 
     let download_url = release
         .assets
@@ -58,15 +24,7 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
 
     let changelog = release.body.clone();
 
-    let zip_bytes = client
-        .get(&download_url)
-        .header("User-Agent", "controller-pack-manager")
-        .send()
-        .map_err(|error| format!("unable to download release asset: {}", error))?
-        .error_for_status()
-        .map_err(|error| format!("release asset request failed: {}", error))?
-        .bytes()
-        .map_err(|error| format!("unable to read release zip content: {}", error))?;
+    let zip_bytes = download_bytes(&download_url, None)?;
 
     let reader = std::io::Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(reader)
@@ -125,7 +83,7 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
 }
 
 pub fn run_get_latest_airac_changelog() -> Result<String, String> {
-    let release = fetch_latest_release()?;
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
     Ok(release.body)
 }
 

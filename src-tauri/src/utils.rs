@@ -2,7 +2,13 @@ use std::fs;
 use std::path::Path;
 
 pub fn should_skip_release_entry(name: &str) -> bool {
-    name.eq_ignore_ascii_case("ignore") || name.eq_ignore_ascii_case("crc_checksums.txt")
+    let lower_name = name.to_ascii_lowercase();
+    lower_name == "ignore"
+        || lower_name == "crc_checksums.txt"
+        || lower_name.contains("checksum")
+        || lower_name.ends_with(".sha256")
+        || lower_name.ends_with(".sha1")
+        || lower_name.ends_with(".md5")
 }
 
 pub fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), String> {

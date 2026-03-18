@@ -18,6 +18,7 @@ export type Profile = {
 const renderApp = (
     euroscopeConfigPath: string | null,
     installedAiracVersion: string | null,
+    installedPluginVersion: string | null,
     newAiracVersionAvailable: boolean | null,
     profiles: Profile[] | null,
     hoppieCode: string | null,
@@ -28,6 +29,7 @@ const renderApp = (
             <App
                 euroscopeConfigPath={euroscopeConfigPath}
                 installedAiracVersion={installedAiracVersion}
+                installedPluginVersion={installedPluginVersion}
                 newAiracVersionAvailable={newAiracVersionAvailable}
                 profiles={profiles}
                 hoppieCode={hoppieCode}
@@ -40,6 +42,7 @@ const renderApp = (
 const bootstrap = async () => {
     let euroscopeConfigPath: string | null = null;
     let installedAiracVersion: string | null = null;
+    let installedPluginVersion: string | null = null;
     let newAiracVersionAvailable: boolean | null = null;
     let profiles: Profile[] | null = null;
     let hoppieCode: string | null = null;
@@ -48,6 +51,7 @@ const bootstrap = async () => {
     try {
         euroscopeConfigPath = await invoke<string | null>("get_detected_euroscope_config_dir");
         installedAiracVersion = await invoke<string | null>("get_detected_installed_airac_version");
+        installedPluginVersion = await invoke<string | null>("get_installed_plugin_version");
         profiles = await invoke<Profile[] | null>("get_existing_profiles");
         newAiracVersionAvailable = await invoke<boolean | null>("is_new_airac_version_available");
         hoppieCode = await invoke<string | null>("get_hoppie_code");
@@ -58,6 +62,7 @@ const bootstrap = async () => {
     renderApp(
         euroscopeConfigPath,
         installedAiracVersion,
+        installedPluginVersion,
         newAiracVersionAvailable,
         profiles,
         hoppieCode,
