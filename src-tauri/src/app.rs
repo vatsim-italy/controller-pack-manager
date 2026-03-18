@@ -1,3 +1,4 @@
+use crate::profile::Profile;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -14,50 +15,6 @@ struct GitHubRelease {
 #[derive(Debug, Serialize)]
 struct ControllerPackManagerConfig {
     installed_airac_version: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Profile {
-    pub name: String,
-    pub real_name: Option<String>,
-    pub certificate: Option<String>,
-    pub server: Option<String>,
-    pub connect_to_vatsim: Option<bool>,
-    pub proxy_server: Option<String>,
-}
-
-impl Profile {
-    fn parse(file_name: &str, content: String) -> Self {
-        let mut profile = Profile {
-            name: file_name.to_string(),
-            ..Default::default()
-        };
-
-        for line in content.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-
-            if parts.len() < 2 || parts[0] != "LastSession" {
-                continue;
-            }
-
-            let key = parts[1];
-            let value = parts[2..].join(" ");
-
-            match key {
-                "realname" => profile.real_name = Some(value),
-                "certificate" => profile.certificate = Some(value),
-                "server" => profile.server = Some(value),
-                "proxyserver" => profile.proxy_server = Some(value),
-                "tovatsim" => {
-                    profile.connect_to_vatsim = Some(value == "1");
-                }
-                _ => {}
-            }
-        }
-
-        profile
-    }
 }
 
 #[derive(Debug)]

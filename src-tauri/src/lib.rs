@@ -1,5 +1,9 @@
+mod airac;
 mod app;
 mod commands;
+mod plugin;
+mod profile;
+mod topsky;
 mod utils;
 
 use app::AppState;
