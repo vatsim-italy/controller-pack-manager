@@ -80,7 +80,11 @@ function App(
     };
 
     return (
-        <Layout activeSection={activeSection} onSectionChange={setActiveSection}>
+        <Layout
+            activeSection={activeSection}
+            onSectionChange={setActiveSection}
+            isEuroscopeDetected={Boolean(euroscopeConfigPath)}
+        >
             <div className="w-full space-y-4">
                 <section className="border-b border-secondary-600 pb-3">
                     <div className="flex items-start justify-between gap-3">

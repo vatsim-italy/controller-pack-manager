@@ -24,7 +24,6 @@ export const AiracSection = ({
         lastCheckedAt,
     } = useAiracUpdate();
 
-    const isUpToDate = newAiracVersionAvailable === false;
     const hasUpdate = newAiracVersionAvailable === true;
     const cardTitle = startupError
         ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`

@@ -6,6 +6,7 @@ interface LayoutProps {
     children: ReactNode;
     activeSection: DashboardSection;
     onSectionChange: (section: DashboardSection) => void;
+    isEuroscopeDetected: boolean;
 }
 
 const IconDocument = () => (
@@ -38,21 +39,6 @@ const IconCompass = () => (
     </svg>
 );
 
-const IconSettings = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-        <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" />
-        <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 1 1-4 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 1 1 0-4h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 1 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a2 2 0 1 1 0 4h-.2a1 1 0 0 0-.9.6z" />
-    </svg>
-);
-
-const IconHelp = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9.1 9a3 3 0 1 1 5 2.2c-.8.7-1.6 1.2-1.6 2.3" />
-        <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
-    </svg>
-);
-
 const dashboardItems: Array<{
     id: DashboardSection;
     label: string;
@@ -64,7 +50,7 @@ const dashboardItems: Array<{
         { id: "topsky", label: "TopSky", icon: <IconCompass /> },
     ];
 
-export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps) => {
+export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDetected }: LayoutProps) => {
     return (
         <ErrorBoundary>
             <div className="flex h-screen w-full overflow-hidden bg-secondary-700 text-white">
@@ -96,9 +82,9 @@ export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps
                     </nav>
 
                     <div className="space-y-3 border-t border-secondary-600 p-4">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-secondary-600 px-3 py-1 text-sm font-medium text-secondary-100">
-                            <span className="h-2 w-2 rounded-full bg-accent-success"></span>
-                            EuroScope Detected
+                        <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-secondary-100">
+                            <span className={`h-2 w-2 rounded-full ${isEuroscopeDetected ? "bg-accent-success" : "bg-accent-danger"}`}></span>
+                            {isEuroscopeDetected ? "EuroScope Detected" : "EuroScope Not Detected"}
                         </div>
                     </div>
                 </aside>
