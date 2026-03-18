@@ -22,6 +22,8 @@ pub fn run() {
             get_hoppie_code,
             update_airac_version,
             get_latest_airac_changelog,
+            update_profile,
+            delete_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

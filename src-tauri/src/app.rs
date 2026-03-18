@@ -180,7 +180,7 @@ impl AppState {
         Self::is_latest_newer(current_version, &release.tag_name)
     }
 
-    fn parse_existing_profiles(euroscope_config_dir: &str) -> Option<Vec<Profile>> {
+    pub fn parse_existing_profiles(euroscope_config_dir: &str) -> Option<Vec<Profile>> {
         let directory = fs::read_dir(euroscope_config_dir).ok()?;
         let existing_profiles: Vec<String> = directory
             .filter_map(|entry| {
