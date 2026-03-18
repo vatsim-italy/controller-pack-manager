@@ -15,9 +15,15 @@ export const AiracSection = ({
 }: AiracSectionProps) => {
     const {
         isUpdating,
+        isImportingSectorZip,
+        hasImportedSectorFiles,
         updateError,
+        sectorImportError,
+        sectorImportSuccess,
         updateSuccess,
         updateAirac,
+        openSectorDownloadPage,
+        importSectorZip,
         checkForUpdates,
         clearError,
         changelog,
@@ -26,11 +32,14 @@ export const AiracSection = ({
     } = useAiracUpdate();
 
     const hasUpdate = newAiracVersionAvailable === true;
+    const requiresSectorImport = hasUpdate && !hasImportedSectorFiles;
     const cardTitle = startupError
         ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
-        : hasUpdate
-            ? `Update Available: AIRAC ${installedAiracVersion ?? "unknown"}`
-            : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+        : requiresSectorImport
+            ? `Update Ready: Import Sector Files for AIRAC ${installedAiracVersion ?? "unknown"}`
+            : hasUpdate
+                ? `Update Available: AIRAC ${installedAiracVersion ?? "unknown"}`
+                : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
 
     const formattedLastChecked = lastCheckedAt
         ? lastCheckedAt.toLocaleString([], {
@@ -59,17 +68,52 @@ export const AiracSection = ({
                         <div className="space-y-1.5">
                             <h2 className="text-xl font-bold text-white">{cardTitle}</h2>
                             <p className="text-xs text-secondary-500">Last check for updates: {formattedLastChecked}</p>
+                            {requiresSectorImport && (
+                                <p className="text-xs text-accent-warning">
+                                    Install is locked until you import the downloaded AeroNav sector zip.
+                                </p>
+                            )}
                         </div>
                     </div>
 
-                    <button
-                        className="btn-primary px-5 py-2.5 text-sm font-bold"
-                        onClick={hasUpdate ? updateAirac : checkForUpdates}
-                        disabled={isUpdating || startupError !== null}
-                    >
-                        {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
-                        {isUpdating ? "Updating..." : hasUpdate ? "Install Update" : "Check for Updates"}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                        {hasUpdate && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="btn-secondary btn-small"
+                                    onClick={() => void openSectorDownloadPage()}
+                                    disabled={startupError !== null || isUpdating || isImportingSectorZip}
+                                >
+                                    Download Update
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="btn-warning btn-small"
+                                    onClick={() => void importSectorZip()}
+                                    disabled={startupError !== null || isUpdating || isImportingSectorZip}
+                                >
+                                    {isImportingSectorZip ? "Importing..." : "Import Update"}
+                                </button>
+                            </>
+                        )}
+
+                        <button
+                            className="btn-primary px-5 py-2.5 text-sm font-bold"
+                            onClick={hasUpdate ? updateAirac : checkForUpdates}
+                            disabled={isUpdating || startupError !== null || requiresSectorImport}
+                        >
+                            {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
+                            {isUpdating
+                                ? "Updating..."
+                                : requiresSectorImport
+                                    ? "Import Sector ZIP First"
+                                    : hasUpdate
+                                        ? "Install Update"
+                                        : "Check for Updates"}
+                        </button>
+                    </div>
                 </div>
 
                 {startupError && (
@@ -80,6 +124,32 @@ export const AiracSection = ({
                             <div className="alert-message">
                                 AIRAC information could not be loaded due to a startup error.
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {sectorImportError && (
+                    <div className="mt-4 alert alert-error">
+                        <div className="alert-icon">❌</div>
+                        <div className="alert-content">
+                            <div className="alert-title">Sector Import Failed</div>
+                            <div className="alert-message">{sectorImportError}</div>
+                        </div>
+                        <button
+                            className="btn-secondary btn-small mt-2"
+                            onClick={clearError}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
+
+                {sectorImportSuccess && (
+                    <div className="mt-4 alert alert-success">
+                        <div className="alert-icon">✅</div>
+                        <div className="alert-content">
+                            <div className="alert-title">Sector Files Imported</div>
+                            <div className="alert-message">{sectorImportSuccess}</div>
                         </div>
                     </div>
                 )}

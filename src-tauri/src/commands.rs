@@ -1,4 +1,7 @@
-use crate::airac::{run_get_latest_airac_changelog, run_update_airac_version};
+use crate::airac::{
+    run_get_latest_airac_changelog, run_has_imported_sector_files,
+    run_import_sector_files_from_zip, run_update_airac_version,
+};
 use crate::github_http::{clear_stored_github_token, resolve_github_token, store_github_token};
 use crate::plugin::{
     get_installed_plugin_version as read_installed_plugin_version,
@@ -115,6 +118,18 @@ pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<S
     })
     .await
     .map_err(|error| format!("update task failed: {}", error))?
+}
+
+#[tauri::command]
+pub fn has_imported_airac_sector_files() -> Result<bool, String> {
+    run_has_imported_sector_files()
+}
+
+#[tauri::command]
+pub async fn import_airac_sector_zip(zip_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || run_import_sector_files_from_zip(zip_path))
+        .await
+        .map_err(|error| format!("import sector zip task failed: {}", error))?
 }
 
 #[tauri::command]

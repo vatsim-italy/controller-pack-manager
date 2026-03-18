@@ -15,6 +15,7 @@ use commands::*;
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::new())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_detected_euroscope_config_dir,
@@ -23,6 +24,8 @@ pub fn run() {
             get_existing_profiles,
             get_hoppie_code,
             update_hoppie_code,
+            has_imported_airac_sector_files,
+            import_airac_sector_zip,
             update_airac_version,
             get_latest_airac_changelog,
             update_plugin_version,
