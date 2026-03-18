@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { DashboardSection } from "../App";
+import logo from "../assets/logo.png";
 
 interface LayoutProps {
     children: ReactNode;
@@ -56,8 +57,10 @@ export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDe
             <div className="flex h-screen w-full overflow-hidden bg-secondary-700 text-white">
                 <aside className="flex h-full w-64 shrink-0 flex-col border-r border-secondary-600 bg-dark-header">
                     <div className="border-b border-secondary-600 px-5 py-6">
-                        <div className="text-2xl font-bold leading-none text-white">VATITA</div>
-                        <p className="mt-1 text-sm text-secondary-500">Italy vACC</p>
+                        <div className="flex items-center gap-3">
+                            <img src={logo} alt="VATITA logo" className="h-9 w-9 object-contain" />
+                            <div className="text-2xl font-bold leading-none text-white">VATITA</div>
+                        </div>
                     </div>
 
                     <nav className="flex-1 space-y-2 p-4" aria-label="Primary">
