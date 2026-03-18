@@ -3,6 +3,22 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { usePluginUpdate } from "../hooks/usePluginUpdate";
 
+const IconEyeOpen = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+    </svg>
+);
+
+const IconEyeClosed = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+        <path d="M3 3l18 18" />
+        <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2" />
+        <path d="M9.9 5.1A11.3 11.3 0 0 1 12 5c6.5 0 10 7 10 7a17.4 17.4 0 0 1-4.2 4.9" />
+        <path d="M6.2 6.3A17.1 17.1 0 0 0 2 12s3.5 7 10 7c1.5 0 2.9-.4 4.1-1" />
+    </svg>
+);
+
 interface PluginSectionProps {
     installedAiracVersion: string | null;
     installedPluginVersion: string | null;
@@ -15,6 +31,7 @@ export const PluginSection = ({
     startupError,
 }: PluginSectionProps) => {
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+    const [isTokenVisible, setIsTokenVisible] = useState(false);
 
     const {
         isUpdating,
@@ -272,18 +289,28 @@ export const PluginSection = ({
                                 Provide a token with repository read access to download plugin releases.
                             </p>
 
-                            <input
-                                type="password"
-                                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                                value={tokenInput}
-                                onChange={(event) => setTokenInput(event.target.value)}
-                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
-                            />
+                            <div className="relative">
+                                <input
+                                    type={isTokenVisible ? "text" : "password"}
+                                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                                    value={tokenInput}
+                                    onChange={(event) => setTokenInput(event.target.value)}
+                                    className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 pr-10 text-sm text-white outline-none focus:border-primary-600"
+                                />
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-100 transition-colors hover:text-white"
+                                    onClick={() => setIsTokenVisible((current) => !current)}
+                                    aria-label={isTokenVisible ? "Hide token" : "Show token"}
+                                >
+                                    {isTokenVisible ? <IconEyeClosed /> : <IconEyeOpen />}
+                                </button>
+                            </div>
 
                             <div className="flex items-center justify-end gap-2">
                                 <button
                                     type="button"
-                                    className="btn-secondary btn-small"
+                                    className="btn-small rounded-xl bg-accent-danger px-4 py-2 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                     disabled={isSavingToken}
                                     onClick={() => void clearGithubToken()}
                                 >

@@ -22,6 +22,7 @@ pub fn run() {
             is_new_airac_version_available,
             get_existing_profiles,
             get_hoppie_code,
+            update_hoppie_code,
             update_airac_version,
             get_latest_airac_changelog,
             update_plugin_version,

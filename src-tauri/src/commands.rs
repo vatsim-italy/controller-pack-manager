@@ -8,6 +8,7 @@ use crate::plugin::{
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
 use crate::profile::{delete_profile_and_reload, update_profile_and_reload, Profile};
+use crate::topsky::run_update_hoppie_code;
 use crate::AppState;
 
 #[tauri::command]
@@ -58,6 +59,30 @@ pub fn get_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<Strin
         .lock()
         .map_err(|error| error.to_string())?;
     Ok(lock.clone())
+}
+
+#[tauri::command]
+pub async fn update_hoppie_code(
+    hoppie_code: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let updated_code = hoppie_code.trim().to_string();
+    if updated_code.is_empty() {
+        return Err("hoppie code cannot be empty".to_string());
+    }
+
+    let code_for_write = updated_code.clone();
+    tauri::async_runtime::spawn_blocking(move || run_update_hoppie_code(code_for_write))
+        .await
+        .map_err(|error| format!("update hoppie task failed: {}", error))??;
+
+    let mut hoppie_lock = state
+        .hoppie_code
+        .lock()
+        .map_err(|error| error.to_string())?;
+    *hoppie_lock = Some(updated_code);
+
+    Ok(())
 }
 
 #[tauri::command]

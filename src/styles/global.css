@@ -15,6 +15,18 @@
         @apply bg-secondary-700 text-secondary-100 antialiased;
     }
 
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+        display: none;
+    }
+
+    input[type="password"]::-webkit-credentials-auto-fill-button {
+        visibility: hidden;
+        pointer-events: none;
+        position: absolute;
+        right: 0;
+    }
+
     .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
     }
