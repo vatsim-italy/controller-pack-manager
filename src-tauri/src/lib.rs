@@ -5,6 +5,7 @@ mod config;
 mod github_http;
 mod plugin;
 mod profile;
+mod settings;
 mod topsky;
 mod utils;
 
