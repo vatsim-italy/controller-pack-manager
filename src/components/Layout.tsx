@@ -40,8 +40,8 @@ export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps
                                     type="button"
                                     onClick={() => onSectionChange(item.id)}
                                     className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-xl font-semibold transition-all duration-150 ${isActive
-                                            ? "bg-primary-600 text-white shadow-lg"
-                                            : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
+                                        ? "bg-primary-600 text-white shadow-lg"
+                                        : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
                                         }`}
                                 >
                                     <span aria-hidden>{item.icon}</span>
@@ -54,16 +54,7 @@ export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps
                     <div className="space-y-4 border-t border-secondary-600 p-5">
                         <div className="inline-flex items-center gap-2 rounded-full bg-secondary-600 px-3 py-1 text-sm font-medium text-secondary-100">
                             <span className="h-2 w-2 rounded-full bg-accent-success"></span>
-                            EuroScope Connected
-                        </div>
-
-                        <div className="space-y-2 text-sm text-secondary-500">
-                            <button type="button" className="block w-full rounded-lg px-2 py-2 text-left hover:bg-secondary-600 hover:text-white">
-                                Settings
-                            </button>
-                            <button type="button" className="block w-full rounded-lg px-2 py-2 text-left hover:bg-secondary-600 hover:text-white">
-                                Support
-                            </button>
+                            EuroScope Detected
                         </div>
                     </div>
                 </aside>
