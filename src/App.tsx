@@ -81,13 +81,20 @@ function App(
 
     return (
         <Layout activeSection={activeSection} onSectionChange={setActiveSection}>
-            <div className="mx-auto w-full max-w-5xl space-y-6">
-                <section className="border-b border-secondary-600 pb-5">
-                    <h1 className="text-4xl font-bold text-white">{sectionMeta.title}</h1>
-                    <p className="mt-2 text-base text-secondary-500">{sectionMeta.subtitle}</p>
+            <div className="w-full space-y-4">
+                <section className="border-b border-secondary-600 pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
+                        {activeSection === "sector-file" && (
+                            <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
+                                AIRAC {installedAiracVersion ?? "unknown"}
+                            </span>
+                        )}
+                    </div>
+                    <p className="mt-1 text-sm text-secondary-500">{sectionMeta.subtitle}</p>
                 </section>
 
-                <div className="pb-8">
+                <div className="pb-6">
                     {renderSection()}
                 </div>
             </div>

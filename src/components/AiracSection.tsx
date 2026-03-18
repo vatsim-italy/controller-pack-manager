@@ -21,45 +21,49 @@ export const AiracSection = ({
         clearError,
         changelog,
         isLoadingChangelog,
+        lastCheckedAt,
     } = useAiracUpdate();
 
     const isUpToDate = newAiracVersionAvailable === false;
     const hasUpdate = newAiracVersionAvailable === true;
-    const statusTitle = startupError
-        ? "Sector File Status: Unavailable"
-        : isUpToDate
-            ? "Sector File Status: Up to Date"
-            : hasUpdate
-                ? "Sector File Status: Update Available"
-                : "Sector File Status: Unknown";
+    const cardTitle = startupError
+        ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
+        : hasUpdate
+            ? `Update Available: AIRAC ${installedAiracVersion ?? "unknown"}`
+            : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+
+    const formattedLastChecked = lastCheckedAt
+        ? lastCheckedAt.toLocaleString([], {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+        : "Never";
 
     return (
-        <div className="space-y-8">
-            <section className="rounded-xl border border-secondary-600 bg-dark-header p-8 shadow-md">
+        <div className="space-y-6">
+            <section className="rounded-xl border border-secondary-600 bg-dark-header p-6 shadow-md">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-start gap-5">
-                        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-secondary-600 bg-secondary-700">
-                            <span className={`text-4xl ${startupError ? "text-accent-danger" : hasUpdate ? "text-accent-warning" : "text-accent-success"}`}>
-                                {startupError ? "⚠" : hasUpdate ? "↻" : "✓"}
-                            </span>
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-secondary-600 bg-secondary-700">
+                            {startupError ? (
+                                <span className="text-2xl text-accent-danger">⚠</span>
+                            ) : hasUpdate ? (
+                                <span className="text-2xl text-accent-warning">↻</span>
+                            ) : (
+                                <span className="text-2xl text-accent-success">✓</span>
+                            )}
                         </div>
-                        <div className="space-y-2">
-                            <h2 className="text-2xl font-bold text-white">{statusTitle}</h2>
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-secondary-500">
-                                <span className="rounded bg-primary-600/20 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    {installedAiracVersion ?? "unknown"}
-                                </span>
-                                <span>
-                                    {isLoadingChangelog
-                                        ? "Checking latest release notes..."
-                                        : "Synced with VATITA release feed"}
-                                </span>
-                            </div>
+
+                        <div className="space-y-1.5">
+                            <h2 className="text-xl font-bold text-white">{cardTitle}</h2>
+                            <p className="text-xs text-secondary-500">Last check for updates: {formattedLastChecked}</p>
                         </div>
                     </div>
 
                     <button
-                        className="btn-primary px-6 py-3 font-bold"
+                        className="btn-primary px-5 py-2.5 text-sm font-bold"
                         onClick={updateAirac}
                         disabled={isUpdating || startupError !== null}
                     >
@@ -127,7 +131,7 @@ export const AiracSection = ({
                         </span>
                     </div>
 
-                    <div className="max-h-96 overflow-y-auto p-6 custom-scrollbar">
+                    <div className="custom-scrollbar max-h-[calc(100vh-410px)] overflow-y-auto p-6">
                         {isLoadingChangelog ? (
                             <p className="text-sm text-secondary-500">Loading latest release notes…</p>
                         ) : changelog ? (

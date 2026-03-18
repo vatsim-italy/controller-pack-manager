@@ -8,11 +8,11 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: "#f0fdfb",
-          100: "#ccfbf1",
-          500: "#2dd4dc",
-          600: "#06b6d4",
-          700: "#0891b2",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#3b82f6",
+          600: "#2463eb",
+          700: "#1d4ed8",
         },
         secondary: {
           50: "#f8fafb",

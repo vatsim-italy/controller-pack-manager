@@ -7,6 +7,7 @@ export const useAiracUpdate = () => {
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [changelog, setChangelog] = useState<string | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
 
   const normalizeChangelog = (value: string | null) => {
     if (!value || value.trim().length === 0) {
@@ -22,8 +23,10 @@ export const useAiracUpdate = () => {
     try {
       const latestChangelog = await invoke<string>("get_latest_airac_changelog");
       setChangelog(normalizeChangelog(latestChangelog));
+      setLastCheckedAt(new Date());
     } catch {
       setChangelog(null);
+      setLastCheckedAt(new Date());
     } finally {
       setIsLoadingChangelog(false);
     }
@@ -50,6 +53,7 @@ export const useAiracUpdate = () => {
       setUpdateError(errorMessage);
     } finally {
       setIsUpdating(false);
+      setLastCheckedAt(new Date());
     }
   };
 
@@ -65,5 +69,6 @@ export const useAiracUpdate = () => {
     clearSuccess,
     changelog,
     isLoadingChangelog,
+    lastCheckedAt,
   };
 };
