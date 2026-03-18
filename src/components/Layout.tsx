@@ -40,6 +40,17 @@ const IconCompass = () => (
     </svg>
 );
 
+const IconList = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6" aria-hidden>
+        <path d="M9 6h11" />
+        <path d="M9 12h11" />
+        <path d="M9 18h11" />
+        <circle cx="4" cy="6" r="1" />
+        <circle cx="4" cy="12" r="1" />
+        <circle cx="4" cy="18" r="1" />
+    </svg>
+);
+
 const dashboardItems: Array<{
     id: DashboardSection;
     label: string;
@@ -49,6 +60,7 @@ const dashboardItems: Array<{
         { id: "plugin", label: "Plugin", icon: <IconPlugin /> },
         { id: "profiles", label: "Profiles", icon: <IconProfile /> },
         { id: "topsky", label: "TopSky", icon: <IconCompass /> },
+        { id: "lists", label: "Lists", icon: <IconList /> },
     ];
 
 export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDetected }: LayoutProps) => {

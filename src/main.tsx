@@ -15,6 +15,21 @@ export type Profile = {
     proxyServer: string | null,
 }
 
+export type ListColumn = {
+    values: string[],
+}
+
+export type ListConfig = {
+    id: string,
+    visible: boolean,
+    x: number,
+    y: number,
+    resizable: boolean,
+    ordered_by_index: number,
+    header_only: boolean,
+    columns: ListColumn[],
+}
+
 const renderApp = (
     euroscopeConfigPath: string | null,
     installedAiracVersion: string | null,
@@ -22,6 +37,7 @@ const renderApp = (
     newAiracVersionAvailable: boolean | null,
     profiles: Profile[] | null,
     hoppieCode: string | null,
+    listConfigs: ListConfig[] | null,
     startupError: string | null
 ) => {
     ReactDOM.createRoot(rootElement).render(
@@ -33,6 +49,7 @@ const renderApp = (
                 newAiracVersionAvailable={newAiracVersionAvailable}
                 profiles={profiles}
                 hoppieCode={hoppieCode}
+                listConfigs={listConfigs}
                 startupError={startupError}
             />
         </React.StrictMode>,
@@ -46,6 +63,7 @@ const bootstrap = async () => {
     let newAiracVersionAvailable: boolean | null = null;
     let profiles: Profile[] | null = null;
     let hoppieCode: string | null = null;
+    let listConfigs: ListConfig[] | null = null;
     let startupError: string | null = null;
 
     try {
@@ -54,6 +72,7 @@ const bootstrap = async () => {
         installedPluginVersion = await invoke<string | null>("get_installed_plugin_version");
         profiles = await invoke<Profile[] | null>("get_existing_profiles");
         newAiracVersionAvailable = await invoke<boolean | null>("is_new_airac_version_available");
+        listConfigs = await invoke<ListConfig[] | null>("get_list_configs");
         hoppieCode = await invoke<string | null>("get_hoppie_code");
     } catch (error) {
         startupError = error instanceof Error ? error.message : String(error);
@@ -66,6 +85,7 @@ const bootstrap = async () => {
         newAiracVersionAvailable,
         profiles,
         hoppieCode,
+        listConfigs,
         startupError
     );
 };

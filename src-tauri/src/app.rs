@@ -1,5 +1,6 @@
 use crate::config::ensure_config_file;
 use crate::profile::Profile;
+use crate::settings::ListConfig;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub new_airac_version_available: Mutex<Option<bool>>,
     pub profiles: Mutex<Option<Vec<Profile>>>,
     pub hoppie_code: Mutex<Option<String>>,
+    pub list_configs: Mutex<Option<Vec<ListConfig>>>,
 }
 
 impl AppState {
@@ -37,6 +39,10 @@ impl AppState {
             .as_deref()
             .and_then(Self::parse_hoppie_code);
 
+        let list_configs = detected_euroscope_config_dir
+            .as_deref()
+            .and_then(Self::parse_list_configs);
+
         let _ = ensure_config_file(detected_installed_airac_version.as_deref());
 
         let new_airac_version_available = detected_installed_airac_version
@@ -49,6 +55,7 @@ impl AppState {
             new_airac_version_available: Mutex::new(new_airac_version_available),
             profiles: Mutex::new(profiles),
             hoppie_code: Mutex::new(hoppie_code),
+            list_configs: Mutex::new(list_configs),
         }
     }
 
@@ -191,5 +198,41 @@ impl AppState {
             .join("TopSkyCPDLCHoppieCode.txt");
 
         fs::read_to_string(legacy_path).ok()
+    }
+
+    fn parse_list_configs(euroscope_config_dir: &str) -> Option<Vec<ListConfig>> {
+        let path = PathBuf::from(euroscope_config_dir)
+            .join("LIXX")
+            .join("Settings");
+
+        let directory = fs::read_dir(path).ok()?;
+        let files = directory.filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let filename = path.file_name()?.to_string_lossy();
+
+            if path.is_file()
+                && (filename.contains("List") || filename == "italyCTR")
+                && path.extension()? == "txt"
+            {
+                Some(path)
+            } else {
+                None
+            }
+        });
+
+        Some(
+            files
+                .filter_map(|file| {
+                    if let Ok(content) = fs::read_to_string(file) {
+                        if let Ok(config) = ListConfig::parse(content.as_str()) {
+                            return Some(config);
+                        }
+                    }
+
+                    None
+                })
+                .collect(),
+        )
     }
 }

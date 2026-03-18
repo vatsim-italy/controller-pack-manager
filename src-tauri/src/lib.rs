@@ -40,6 +40,7 @@ pub fn run() {
             get_latest_plugin_installable_version,
             update_profile,
             delete_profile,
+            get_list_configs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

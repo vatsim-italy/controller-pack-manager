@@ -1,12 +1,13 @@
-import { Profile } from "./main";
+import { Profile, ListConfig } from "./main";
 import { Layout } from "./components/Layout";
 import { PluginSection } from "./components/PluginSection";
 import { AiracSection } from "./components/AiracSection";
 import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
+import { ListsSection } from "./components";
 import { useMemo, useState } from "react";
 
-export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky";
+export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists";
 
 type AppProps = {
     euroscopeConfigPath: string | null;
@@ -15,6 +16,7 @@ type AppProps = {
     newAiracVersionAvailable: boolean | null;
     profiles: Profile[] | null;
     hoppieCode: string | null;
+    listConfigs: ListConfig[] | null;
     startupError: string | null;
 };
 
@@ -26,6 +28,7 @@ function App(
         newAiracVersionAvailable,
         profiles,
         hoppieCode,
+        listConfigs,
         startupError
     }: AppProps
 ) {
@@ -48,6 +51,10 @@ function App(
             topsky: {
                 title: "TopSky",
                 subtitle: "Manage your Hoppie code used by TopSky CPDLC features.",
+            },
+            lists: {
+                title: "Lists",
+                subtitle: "View detected EuroScope list configurations and column ordering.",
             },
         };
 
@@ -77,6 +84,10 @@ function App(
 
         if (activeSection === "profiles") {
             return <ProfilesList profiles={profiles} />;
+        }
+
+        if (activeSection === "lists") {
+            return <ListsSection listConfigs={listConfigs} />;
         }
 
         return <HoppieSection hoppieCode={hoppieCode} />;

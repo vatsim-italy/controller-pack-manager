@@ -6,3 +6,5 @@ export { PluginSection } from "./PluginSection";
 export { AiracSection } from "./AiracSection";
 export { ProfilesList } from "./ProfilesList";
 export { HoppieSection } from "./HoppieSection";
+export { ListsSection } from "./ListsSection";
+export { ListConfigCard } from "./ListConfigCard";

@@ -11,6 +11,7 @@ use crate::plugin::{
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
 use crate::profile::{delete_profile_and_reload, update_profile_and_reload, Profile};
+use crate::settings::ListConfig;
 use crate::topsky::run_update_hoppie_code;
 use crate::AppState;
 
@@ -243,4 +244,15 @@ pub async fn delete_profile(
     *profiles_lock = Some(updated_profiles.clone());
 
     Ok(updated_profiles)
+}
+
+#[tauri::command]
+pub fn get_list_configs(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<Vec<ListConfig>>, String> {
+    state
+        .list_configs
+        .lock()
+        .map_err(|error| error.to_string())
+        .map(|lock| lock.clone())
 }
