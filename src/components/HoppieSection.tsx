@@ -19,14 +19,14 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
         <div className="card card-accent">
             <div className="card-header">
                 <div className="card-icon">🔑</div>
-                <h2 className="text-xl font-semibold text-dark-text">Hoppie Code</h2>
+                <h2 className="text-xl font-semibold text-white">Hoppie Code</h2>
             </div>
 
             {hoppieCode ? (
                 <div className="card-content">
                     <div>
-                        <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Code</span>
-                        <div className="bg-gray-50 p-4 rounded-lg font-mono text-lg text-primary-600 break-all user-select-all border border-gray-200">
+                        <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-secondary-500">Your Code</span>
+                        <div className="rounded-lg border border-secondary-500 bg-secondary-700 p-4 font-mono text-lg break-all text-primary-100 user-select-all">
                             {hoppieCode}
                         </div>
                     </div>
@@ -40,8 +40,8 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
             ) : (
                 <div className="text-center py-12">
                     <div className="text-4xl mb-4 opacity-50">🔍</div>
-                    <div className="text-xl font-semibold text-gray-700 mb-2">No Hoppie Code</div>
-                    <div className="text-base text-gray-600">
+                    <div className="mb-2 text-xl font-semibold text-secondary-100">No Hoppie Code</div>
+                    <div className="text-base text-secondary-500">
                         No Hoppie code was found in your EuroScope configuration.
                     </div>
                 </div>

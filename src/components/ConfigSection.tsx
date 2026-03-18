@@ -12,7 +12,7 @@ export const ConfigSection = ({
             <div className="card card-accent">
                 <div className="card-header">
                     <div className="card-icon">📁</div>
-                    <h2 className="text-xl font-semibold text-dark-text">EuroScope Configuration</h2>
+                    <h2 className="text-xl font-semibold text-white">EuroScope Configuration</h2>
                 </div>
                 <div className="alert alert-error">
                     <div className="alert-icon">❌</div>
@@ -29,20 +29,20 @@ export const ConfigSection = ({
         <div className="card card-accent">
             <div className="card-header">
                 <div className="card-icon">📁</div>
-                <h2 className="text-xl font-semibold text-dark-text">EuroScope Configuration</h2>
+                <h2 className="text-xl font-semibold text-white">EuroScope Configuration</h2>
             </div>
             {euroscopeConfigPath ? (
                 <div className="card-content">
                     <div>
-                        <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</span>
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-secondary-500">Status</span>
                         <div className="status-badge status-badge-success">
                             <span className="status-dot"></span>
                             Detected
                         </div>
                     </div>
                     <div>
-                        <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Configuration Path</span>
-                        <span className="block text-base text-dark-text break-all">{euroscopeConfigPath}</span>
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-secondary-500">Configuration Path</span>
+                        <span className="block break-all text-base text-secondary-100">{euroscopeConfigPath}</span>
                     </div>
                 </div>
             ) : (

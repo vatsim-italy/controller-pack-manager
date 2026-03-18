@@ -18,7 +18,7 @@ export const AiracSection = ({
         <div className="card card-accent">
             <div className="card-header">
                 <div className="card-icon">🗺️</div>
-                <h2 className="text-xl font-semibold text-dark-text">AIRAC Release</h2>
+                <h2 className="text-xl font-semibold text-white">AIRAC Release</h2>
             </div>
 
             {startupError ? (
@@ -34,7 +34,7 @@ export const AiracSection = ({
             ) : installedAiracVersion ? (
                 <div className="card-content">
                     <div>
-                        <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Installed Version</span>
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-secondary-500">Installed Version</span>
                         <span className="block text-base text-accent-success font-semibold">{installedAiracVersion}</span>
                     </div>
 
