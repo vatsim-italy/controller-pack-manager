@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "controller-pack-manager",
+    "productName": "VATITA Controller Pack Manager",
     "version": "0.1.0",
     "identifier": "com.vatita.controller-pack-manager",
     "build": {
@@ -15,7 +15,7 @@
                 "title": "VATITA Controller Pack Manager",
                 "width": 1400,
                 "height": 900,
-                "maximized": true
+                "maximized": false
             }
         ],
         "security": {
