@@ -52,23 +52,23 @@ pub fn profile_patch_lines(profile: &Profile) -> Vec<String> {
     let mut lines = Vec::new();
 
     if let Some(value) = &profile.real_name {
-        lines.push(format!("LastSession realname {}", value));
+        lines.push(format!("LastSession\trealname\t{}", value));
     }
 
     if let Some(value) = &profile.certificate {
-        lines.push(format!("LastSession certificate {}", value));
+        lines.push(format!("LastSession\tcertificate\t{}", value));
     }
 
     if let Some(value) = &profile.server {
-        lines.push(format!("LastSession server {}", value));
+        lines.push(format!("LastSession\tserver\t{}", value));
     }
 
     if let Some(value) = profile.connect_to_vatsim {
-        lines.push(format!("LastSession tovatsim {}", value as u8));
+        lines.push(format!("LastSession\ttovatsim\t{}", value as u8));
     }
 
     if let Some(value) = &profile.proxy_server {
-        lines.push(format!("LastSession proxyserver {}", value));
+        lines.push(format!("LastSession\tproxyserver\t{}", value));
     }
 
     lines
