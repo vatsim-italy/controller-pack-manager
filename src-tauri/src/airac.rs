@@ -15,6 +15,24 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
 
     let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
 
+    let sct_asset = release
+        .assets
+        .iter()
+        .find(|asset| asset.name.to_ascii_lowercase().ends_with(".sct"))
+        .ok_or_else(|| {
+            "Installation partially failed. Sector files missing in the github release"
+                .to_string()
+        })?;
+
+    let ese_asset = release
+        .assets
+        .iter()
+        .find(|asset| asset.name.to_ascii_lowercase().ends_with(".ese"))
+        .ok_or_else(|| {
+            "Installation partially failed. Sector files missing in the github release"
+                .to_string()
+        })?;
+
     let download_url = release
         .assets
         .iter()
@@ -25,6 +43,27 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
     let changelog = release.body.clone();
 
     let zip_bytes = download_bytes(&download_url, None)?;
+
+    let sct_bytes = download_bytes(&sct_asset.browser_download_url, None)?;
+    let ese_bytes = download_bytes(&ese_asset.browser_download_url, None)?;
+
+    let downloaded_sct_path = download_folder.join(&sct_asset.name);
+    fs::write(&downloaded_sct_path, sct_bytes).map_err(|error| {
+        format!(
+            "unable to write downloaded sector file '{}': {}",
+            downloaded_sct_path.display(),
+            error
+        )
+    })?;
+
+    let downloaded_ese_path = download_folder.join(&ese_asset.name);
+    fs::write(&downloaded_ese_path, ese_bytes).map_err(|error| {
+        format!(
+            "unable to write downloaded sector file '{}': {}",
+            downloaded_ese_path.display(),
+            error
+        )
+    })?;
 
     let reader = std::io::Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(reader)
@@ -85,6 +124,60 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
 pub fn run_get_latest_airac_changelog() -> Result<String, String> {
     let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
     Ok(release.body)
+}
+
+fn inject_downloaded_sector_files(
+    download_folder: &Path,
+    content_root: &Path,
+) -> Result<(), String> {
+    let mut found_sct = false;
+    let mut found_ese = false;
+
+    for entry in fs::read_dir(download_folder)
+        .map_err(|error| format!("unable to read downloaded folder: {}", error))?
+    {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let extension = path
+            .extension()
+            .map(|value| value.to_string_lossy().to_ascii_lowercase());
+
+        let Some(extension) = extension else {
+            continue;
+        };
+
+        if extension != "sct" && extension != "ese" {
+            continue;
+        }
+
+        let destination = content_root.join(entry.file_name());
+        fs::copy(&path, &destination).map_err(|error| {
+            format!(
+                "unable to copy '{}' to '{}': {}",
+                path.display(),
+                destination.display(),
+                error
+            )
+        })?;
+
+        if extension == "sct" {
+            found_sct = true;
+        }
+
+        if extension == "ese" {
+            found_ese = true;
+        }
+    }
+
+    if !found_sct || !found_ese {
+        return Err("Installation partially failed. Sector files missing in the github release".to_string());
+    }
+
+    Ok(())
 }
 
 fn directory_contains_airac_content(path: &Path) -> bool {
@@ -168,7 +261,10 @@ pub fn copy_release_content(
         }
 
         if source_path.is_file() {
-            let destination = if extension_is(&source_path, "prf") {
+            let destination = if extension_is(&source_path, "prf")
+                || extension_is(&source_path, "sct")
+                || extension_is(&source_path, "ese")
+            {
                 euroscope_config_path.join(&file_name)
             } else {
                 destination_lixx.join(&file_name)
@@ -215,6 +311,7 @@ pub fn run_update_airac_version(
     let changelog = download_and_extract_latest_release(&download_folder)?;
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
+    inject_downloaded_sector_files(&download_folder, &content_root)?;
 
     let euroscope_config_path = PathBuf::from(euroscope_config_dir);
     remove_existing_sector_files(&euroscope_config_path)?;
