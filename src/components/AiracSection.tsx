@@ -18,6 +18,7 @@ export const AiracSection = ({
         updateError,
         updateSuccess,
         updateAirac,
+        checkForUpdates,
         clearError,
         changelog,
         isLoadingChangelog,
@@ -63,7 +64,7 @@ export const AiracSection = ({
 
                     <button
                         className="btn-primary px-5 py-2.5 text-sm font-bold"
-                        onClick={updateAirac}
+                        onClick={hasUpdate ? updateAirac : checkForUpdates}
                         disabled={isUpdating || startupError !== null}
                     >
                         {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
