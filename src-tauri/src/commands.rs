@@ -21,6 +21,7 @@ struct GitHubReleaseAsset {
 struct GitHubRelease {
     zipball_url: String,
     assets: Vec<GitHubReleaseAsset>,
+    body: String,
 }
 
 fn profile_patch_lines(profile: &Profile) -> Vec<String> {
@@ -92,14 +93,12 @@ fn extension_is(path: &Path, extension: &str) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case(extension))
 }
 
-fn download_and_extract_latest_release(download_folder: &Path) -> Result<(), String> {
-    clear_directory(download_folder)?;
-
+fn fetch_latest_release() -> Result<GitHubRelease, String> {
     let client = reqwest::blocking::Client::builder()
         .build()
         .map_err(|error| format!("unable to create http client: {}", error))?;
 
-    let release = client
+    client
         .get(LATEST_RELEASE_API_URL)
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "controller-pack-manager")
@@ -108,7 +107,17 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<(), Str
         .error_for_status()
         .map_err(|error| format!("latest release request failed: {}", error))?
         .json::<GitHubRelease>()
-        .map_err(|error| format!("unable to parse latest release payload: {}", error))?;
+        .map_err(|error| format!("unable to parse latest release payload: {}", error))
+}
+
+fn download_and_extract_latest_release(download_folder: &Path) -> Result<String, String> {
+    clear_directory(download_folder)?;
+
+    let release = fetch_latest_release()?;
+
+    let client = reqwest::blocking::Client::builder()
+        .build()
+        .map_err(|error| format!("unable to create http client: {}", error))?;
 
     let download_url = release
         .assets
@@ -116,6 +125,8 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<(), Str
         .find(|asset| asset.name.to_ascii_lowercase().ends_with(".zip"))
         .map(|asset| asset.browser_download_url.clone())
         .unwrap_or_else(|| release.zipball_url.clone());
+
+    let changelog = release.body.clone();
 
     let zip_bytes = client
         .get(&download_url)
@@ -180,7 +191,12 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<(), Str
         })?;
     }
 
-    Ok(())
+    Ok(changelog)
+}
+
+fn run_get_latest_airac_changelog() -> Result<String, String> {
+    let release = fetch_latest_release()?;
+    Ok(release.body)
 }
 
 fn directory_contains_airac_content(path: &Path) -> bool {
@@ -323,13 +339,13 @@ fn run_update_airac_version(
     euroscope_config_dir: String,
     existing_profiles: Vec<Profile>,
     hoppie_code: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
     let download_folder = PathBuf::from(app_data)
         .join("controller-pack-manager")
         .join("download");
 
-    download_and_extract_latest_release(&download_folder)?;
+    let changelog = download_and_extract_latest_release(&download_folder)?;
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
 
@@ -371,7 +387,7 @@ fn run_update_airac_version(
         )
     })?;
 
-    Ok(())
+    Ok(changelog)
 }
 
 #[tauri::command]
@@ -425,7 +441,7 @@ pub fn get_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<Strin
 }
 
 #[tauri::command]
-pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let euroscope_config_dir = state
         .euroscope_config_dir
         .lock()
@@ -454,4 +470,11 @@ pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<(
     })
     .await
     .map_err(|error| format!("update task failed: {}", error))?
+}
+
+#[tauri::command]
+pub async fn get_latest_airac_changelog() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(run_get_latest_airac_changelog)
+        .await
+        .map_err(|error| format!("changelog task failed: {}", error))?
 }

@@ -112,4 +112,52 @@
     .alert-message {
         @apply text-sm leading-relaxed text-secondary-100;
     }
+
+    .markdown-content {
+        @apply text-sm leading-relaxed text-secondary-100;
+    }
+
+    .markdown-content h1,
+    .markdown-content h2,
+    .markdown-content h3,
+    .markdown-content h4 {
+        @apply mb-2 mt-3 font-semibold text-white;
+    }
+
+    .markdown-content p {
+        @apply mb-2;
+    }
+
+    .markdown-content ul,
+    .markdown-content ol {
+        @apply mb-2 pl-5;
+    }
+
+    .markdown-content ul {
+        @apply list-disc;
+    }
+
+    .markdown-content ol {
+        @apply list-decimal;
+    }
+
+    .markdown-content li {
+        @apply mb-1;
+    }
+
+    .markdown-content code {
+        @apply rounded bg-secondary-700 px-1 py-0.5 font-mono text-xs text-primary-100;
+    }
+
+    .markdown-content pre {
+        @apply mb-2 overflow-x-auto rounded-lg bg-secondary-700 p-3;
+    }
+
+    .markdown-content pre code {
+        @apply bg-transparent p-0 text-xs;
+    }
+
+    .markdown-content a {
+        @apply text-primary-500 underline;
+    }
 }

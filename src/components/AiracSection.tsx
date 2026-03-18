@@ -1,4 +1,6 @@
 import { useAiracUpdate } from "../hooks/useAiracUpdate";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AiracSectionProps {
     installedAiracVersion: string | null;
@@ -11,8 +13,15 @@ export const AiracSection = ({
     newAiracVersionAvailable,
     startupError,
 }: AiracSectionProps) => {
-    const { isUpdating, updateError, updateSuccess, updateAirac, clearError } =
-        useAiracUpdate();
+    const {
+        isUpdating,
+        updateError,
+        updateSuccess,
+        updateAirac,
+        clearError,
+        changelog,
+        isLoadingChangelog,
+    } = useAiracUpdate();
 
     return (
         <div className="card card-accent">
@@ -81,6 +90,23 @@ export const AiracSection = ({
                                 <div className="alert-message">
                                     AIRAC version has been successfully updated!
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {(isLoadingChangelog || changelog) && (
+                        <div className="rounded-xl border border-secondary-500 bg-secondary-600 p-4">
+                            <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-secondary-100">
+                                Changelog
+                            </div>
+                            <div className="markdown-content">
+                                {isLoadingChangelog ? (
+                                    <p>Loading latest release notes…</p>
+                                ) : (
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {changelog ?? ""}
+                                    </ReactMarkdown>
+                                )}
                             </div>
                         </div>
                     )}
