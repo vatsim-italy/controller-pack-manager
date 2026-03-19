@@ -87,9 +87,11 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [dropdownDragState, setDropdownDragState] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
     const [listMenuDragOffset, setListMenuDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [addListSearchQuery, setAddListSearchQuery] = useState<string>("");
 
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    const addListSearchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -129,6 +131,19 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
         setRadarLists(normalized);
         setSelectedListId(null);
     }, [listConfigs]);
+
+    useEffect(() => {
+        if (dropdownState !== "add-list") {
+            return;
+        }
+
+        const frameId = window.requestAnimationFrame(() => {
+            addListSearchInputRef.current?.focus();
+            addListSearchInputRef.current?.select();
+        });
+
+        return () => window.cancelAnimationFrame(frameId);
+    }, [dropdownState]);
 
     const activeResolution = RADAR_RESOLUTIONS[resolution];
 
@@ -191,6 +206,12 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
     // Keyboard handlers
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            // Check if user is typing in an input or textarea
+            const target = event.target as HTMLElement;
+            if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.contentEditable === "true") {
+                return;
+            }
+
             // F key for fullscreen toggle
             if (event.key.toLowerCase() === "f") {
                 event.preventDefault();
@@ -204,6 +225,7 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
                 setDropdownState("add-list");
                 setDropdownPos({ x: 10, y: 10 });
                 setDropdownDragState({ startX: 10, startY: 10, currentX: 10, currentY: 10 });
+                setAddListSearchQuery("");
                 return;
             }
 
@@ -217,6 +239,7 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
             // Escape closes dropdowns
             if (event.key === "Escape") {
                 setDropdownState("closed");
+                setAddListSearchQuery("");
             }
         };
 
@@ -380,6 +403,7 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
                 onClick={() => {
                     if (dropdownState !== "closed") {
                         setDropdownState("closed");
+                        setAddListSearchQuery("");
                     }
                 }}
                 style={{
@@ -505,6 +529,7 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
                                 setDropdownState("add-list");
                                 setDropdownPos({ x: 10, y: 60 });
                                 setDropdownDragState({ startX: 10, startY: 60, currentX: 10, currentY: 60 });
+                                setAddListSearchQuery("");
                             }}
                             title="Add list (Press A or +)"
                         >
@@ -593,8 +618,22 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
                             setDropdownDragState(null);
                         }}
                     >
+                        {/* Search Input */}
+                        <div className="border-b border-secondary-600 sticky top-0 bg-secondary-700 p-2">
+                            <input
+                                ref={addListSearchInputRef}
+                                type="text"
+                                placeholder="Search lists..."
+                                className="w-full rounded border border-secondary-500 bg-secondary-600 px-2 py-1 text-xs text-secondary-100 placeholder-secondary-400 focus:outline-none focus:ring-1 focus:ring-primary-600"
+                                value={addListSearchQuery}
+                                onChange={(e) => setAddListSearchQuery(e.target.value)}
+                                onPointerDown={(e) => e.stopPropagation()}
+                            />
+                        </div>
+
                         {radarLists
                             .filter((list) => !list.visible)
+                            .filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase()))
                             .map((listConfig) => (
                                 <button
                                     key={listConfig.id}
@@ -605,6 +644,10 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
                                     {listConfig.id}
                                 </button>
                             ))}
+                        {radarLists.filter((list) => !list.visible).filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase())).length === 0 &&
+                            !radarLists.every((list) => list.visible) && (
+                                <div className="px-3 py-2 text-xs text-secondary-500">No lists found</div>
+                            )}
                         {radarLists.every((list) => list.visible) && (
                             <div className="px-3 py-2 text-xs text-secondary-500">All lists visible</div>
                         )}
