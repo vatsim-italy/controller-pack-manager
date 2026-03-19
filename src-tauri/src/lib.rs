@@ -42,6 +42,7 @@ pub fn run() {
             delete_profile,
             get_list_configs,
             save_layout,
+            load_layout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

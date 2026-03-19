@@ -210,10 +210,14 @@ impl AppState {
             let entry = entry.ok()?;
             let path = entry.path();
             let filename = path.file_name()?.to_string_lossy();
+            let filename_lower = filename.to_ascii_lowercase();
 
             if path.is_file()
-                && (filename.contains("List") || filename == "italyCTR")
-                && path.extension()? == "txt"
+                && (filename_lower.contains("list") || filename.eq_ignore_ascii_case("italyCTR.txt"))
+                && path
+                    .extension()
+                    .map(|ext| ext.to_string_lossy().eq_ignore_ascii_case("txt"))
+                    .unwrap_or(false)
             {
                 Some(path)
             } else {

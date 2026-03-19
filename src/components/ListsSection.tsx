@@ -3,6 +3,7 @@ import { ListConfig } from "../main";
 
 interface ListsSectionProps {
     listConfigs: ListConfig[] | null;
+    resumeLayout: ListConfig[] | null;
 }
 
 type RadarResolutionKey = "custom" | "1080p" | "2k" | "4k";
@@ -73,7 +74,7 @@ const placeholderValueForColumn = (columnId: string, widthChars: number) => {
 export const ListsSection = forwardRef<
     { getCurrentLayout: () => ListConfig[] | null },
     ListsSectionProps
->(({ listConfigs }, ref) => {
+>(({ listConfigs, resumeLayout }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
 
     const [resolution, setResolution] = useState<RadarResolutionKey>(() => {
@@ -159,18 +160,25 @@ export const ListsSection = forwardRef<
             return;
         }
 
+        const resumeById = new Map((resumeLayout ?? []).map((config) => [config.id, config]));
+
         const normalized = listConfigs.map((config) => ({
+            // Base pool should not depend on currently selected profile configuration.
+            // Resume data, when available, is applied as an overlay.
             id: config.id,
-            visible: false,
-            x: config.x,
-            y: config.y,
-            ordered_by_index: config.ordered_by_index,
-            columns: config.columns.map((column) => ({ values: [...column.values] })),
+            visible: resumeById.get(config.id)?.visible ?? false,
+            x: resumeById.get(config.id)?.x ?? config.x,
+            y: resumeById.get(config.id)?.y ?? config.y,
+            ordered_by_index:
+                resumeById.get(config.id)?.ordered_by_index ?? config.ordered_by_index,
+            columns:
+                resumeById.get(config.id)?.columns.map((column) => ({ values: [...column.values] }))
+                ?? config.columns.map((column) => ({ values: [...column.values] })),
         }));
 
         setRadarLists(normalized);
         setSelectedListId(null);
-    }, [listConfigs]);
+    }, [listConfigs, resumeLayout]);
 
     useEffect(() => {
         if (dropdownState !== "add-list") {

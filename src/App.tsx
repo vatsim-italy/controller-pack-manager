@@ -39,6 +39,7 @@ function App(
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [loadedConfigs, setLoadedConfigs] = useState<ListConfig[] | null>(null);
     const listsSectionRef = useRef<{ getCurrentLayout: () => ListConfig[] | null }>(null);
 
     const refreshProfiles = async () => {
@@ -74,12 +75,14 @@ function App(
                 return;
             }
 
-            await invoke("save_layout", {
+            const result = await invoke<string>("save_layout", {
                 profileName: selectedProfileName.replace(/\.prf$/i, ""),
                 listConfigs: currentLayout,
             });
 
             setSaveSuccess(true);
+            // Show the success message
+            console.log(result);
             setTimeout(() => setSaveSuccess(false), 3000);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -95,6 +98,38 @@ function App(
             setSelectedProfileName(appProfiles[0].name);
         }
     }, [appProfiles, selectedProfileName]);
+
+    useEffect(() => {
+        if (!selectedProfileName) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const restoreLayout = async () => {
+            setLoadedConfigs(null);
+
+            try {
+                const loadedLayout = await invoke<ListConfig[]>("load_layout", {
+                    profileName: selectedProfileName.replace(/\.prf$/i, ""),
+                });
+
+                if (!cancelled) {
+                    setLoadedConfigs(loadedLayout);
+                }
+            } catch {
+                if (!cancelled) {
+                    setLoadedConfigs(null);
+                }
+            }
+        };
+
+        restoreLayout();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedProfileName]);
 
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
@@ -149,7 +184,13 @@ function App(
         }
 
         if (activeSection === "lists") {
-            return <ListsSection listConfigs={listConfigs} ref={listsSectionRef} />;
+            return (
+                <ListsSection
+                    listConfigs={listConfigs}
+                    resumeLayout={loadedConfigs}
+                    ref={listsSectionRef}
+                />
+            );
         }
 
         return <HoppieSection hoppieCode={hoppieCode} />;

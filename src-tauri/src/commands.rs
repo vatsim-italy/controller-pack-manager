@@ -269,7 +269,7 @@ pub async fn save_layout(
     profile_name: String,
     list_configs: Vec<ListConfig>,
     state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let euroscope_config_dir = state
         .euroscope_config_dir
         .lock()
@@ -298,7 +298,7 @@ fn run_save_layout(
     euroscope_config_dir: &str,
     profile_name: &str,
     list_configs: Vec<ListConfig>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     // Convert profile name to snake_case for file paths (handles spaces and special chars)
     let profile_name_snake = to_snake_case(profile_name);
 
@@ -365,5 +365,64 @@ fn run_save_layout(
 
     patch_profile_settings_lines(&profile_path, list_ids, &settings_path)?;
 
-    Ok(())
+    Ok(format!(
+        "Layout saved successfully for profile '{}'",
+        profile_name
+    ))
+}
+
+#[tauri::command]
+pub async fn load_layout(profile_name: String) -> Result<Vec<ListConfig>, String> {
+    tauri::async_runtime::spawn_blocking(move || run_load_layout(&profile_name))
+        .await
+        .map_err(|error| format!("load layout task failed: {}", error))?
+}
+
+fn run_load_layout(profile_name: &str) -> Result<Vec<ListConfig>, String> {
+    // Convert profile name to snake_case to match saved format
+    let profile_name_snake = to_snake_case(profile_name);
+
+    // Build path to custom-profiles Lists.txt
+    let appdata = env::var("APPDATA")
+        .map_err(|error| format!("unable to get APPDATA environment variable: {}", error))?;
+
+    let lists_txt_path = PathBuf::from(&appdata)
+        .join("controller-pack-manager")
+        .join("custom-profiles")
+        .join(&profile_name_snake)
+        .join("Lists.txt");
+
+    // Read the file
+    let content = fs::read_to_string(&lists_txt_path).map_err(|error| {
+        format!(
+            "unable to read Lists.txt for profile '{}': {}",
+            profile_name, error
+        )
+    })?;
+
+    // Parse the content: each ListConfig block is separated by "END"
+    let list_configs: Vec<ListConfig> = content
+        .split("END")
+        .map(|block| block.trim())
+        .filter(|block| !block.is_empty())
+        .filter_map(|block| {
+            // Each block needs to have the ID restored by adding it back to the start
+            match ListConfig::parse(block) {
+                Ok(config) => Some(config),
+                Err(e) => {
+                    eprintln!("warning: failed to parse list config block: {}", e);
+                    None
+                }
+            }
+        })
+        .collect();
+
+    if list_configs.is_empty() {
+        return Err(format!(
+            "no list configurations found in saved layout for profile '{}'",
+            profile_name
+        ));
+    }
+
+    Ok(list_configs)
 }
