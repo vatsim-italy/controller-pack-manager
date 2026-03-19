@@ -25,6 +25,7 @@ export type ListConfig = {
     visible: boolean,
     x: number,
     y: number,
+    line_number: number,
     resizable: boolean,
     ordered_by_index: number,
     header_only: boolean,
@@ -34,6 +35,7 @@ export type ListConfig = {
 const renderApp = (
     euroscopeConfigPath: string | null,
     installedAiracVersion: string | null,
+    latestAiracVersion: string | null,
     installedPluginVersion: string | null,
     newAiracVersionAvailable: boolean | null,
     profiles: Profile[] | null,
@@ -46,6 +48,7 @@ const renderApp = (
             <App
                 euroscopeConfigPath={euroscopeConfigPath}
                 installedAiracVersion={installedAiracVersion}
+                latestAiracVersion={latestAiracVersion}
                 installedPluginVersion={installedPluginVersion}
                 newAiracVersionAvailable={newAiracVersionAvailable}
                 profiles={profiles}
@@ -60,6 +63,7 @@ const renderApp = (
 const bootstrap = async () => {
     let euroscopeConfigPath: string | null = null;
     let installedAiracVersion: string | null = null;
+    let latestAiracVersion: string | null = null;
     let installedPluginVersion: string | null = null;
     let newAiracVersionAvailable: boolean | null = null;
     let profiles: Profile[] | null = null;
@@ -70,6 +74,7 @@ const bootstrap = async () => {
     try {
         euroscopeConfigPath = await invoke<string | null>("get_detected_euroscope_config_dir");
         installedAiracVersion = await invoke<string | null>("get_detected_installed_airac_version");
+        latestAiracVersion = await invoke<string | null>("get_latest_airac_version");
         installedPluginVersion = await invoke<string | null>("get_installed_plugin_version");
         profiles = await invoke<Profile[] | null>("get_existing_profiles");
         newAiracVersionAvailable = await invoke<boolean | null>("is_new_airac_version_available");
@@ -82,6 +87,7 @@ const bootstrap = async () => {
     renderApp(
         euroscopeConfigPath,
         installedAiracVersion,
+        latestAiracVersion,
         installedPluginVersion,
         newAiracVersionAvailable,
         profiles,

@@ -4,12 +4,14 @@ import remarkGfm from "remark-gfm";
 
 interface AiracSectionProps {
     installedAiracVersion: string | null;
+    latestAiracVersion: string | null;
     newAiracVersionAvailable: boolean | null;
     startupError: string | null;
 }
 
 export const AiracSection = ({
     installedAiracVersion,
+    latestAiracVersion,
     newAiracVersionAvailable,
     startupError,
 }: AiracSectionProps) => {
@@ -33,12 +35,13 @@ export const AiracSection = ({
 
     const hasUpdate = newAiracVersionAvailable === true;
     const requiresSectorImport = hasUpdate && !hasImportedSectorFiles;
+    const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "unknown";
     const cardTitle = startupError
         ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
         : requiresSectorImport
-            ? `Update Ready: Import Sector Files for AIRAC ${installedAiracVersion ?? "unknown"}`
+            ? `Update Ready: Import Sector Files for AIRAC ${targetAiracVersion}`
             : hasUpdate
-                ? `Update Available: AIRAC ${installedAiracVersion ?? "unknown"}`
+                ? `Update Available: AIRAC ${targetAiracVersion}`
                 : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
 
     const formattedLastChecked = lastCheckedAt

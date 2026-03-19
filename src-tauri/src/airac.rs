@@ -239,10 +239,16 @@ pub fn run_has_imported_sector_files() -> Result<bool, String> {
     has_required_sector_files(&imported_sector_folder)
 }
 
-fn download_and_extract_latest_release(download_folder: &Path) -> Result<String, String> {
+fn download_and_extract_latest_release_with_version(
+    download_folder: &Path,
+) -> Result<(String, String), String> {
     clear_directory(download_folder)?;
 
     let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
+    let latest_version = release.tag_name.trim().to_string();
+    if latest_version.is_empty() {
+        return Err("latest AIRAC release tag is empty".to_string());
+    }
 
     let download_url = release
         .assets
@@ -308,12 +314,38 @@ fn download_and_extract_latest_release(download_folder: &Path) -> Result<String,
         })?;
     }
 
-    Ok(changelog)
+    Ok((changelog, latest_version))
+}
+
+fn write_airac_version_file(destination_lixx: &Path, latest_version: &str) -> Result<(), String> {
+    let airac_version_file_path = destination_lixx.join("AIRAC_VERSION.txt");
+    fs::write(
+        &airac_version_file_path,
+        format!("AIRAC {}", latest_version),
+    )
+    .map_err(|error| {
+        format!(
+            "unable to write AIRAC version file '{}': {}",
+            airac_version_file_path.display(),
+            error
+        )
+    })
 }
 
 pub fn run_get_latest_airac_changelog() -> Result<String, String> {
     let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
     Ok(release.body)
+}
+
+pub fn run_get_latest_airac_version() -> Result<String, String> {
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
+    let version = release.tag_name.trim();
+
+    if version.is_empty() {
+        return Err("latest AIRAC release tag is empty".to_string());
+    }
+
+    Ok(version.to_string())
 }
 
 fn directory_contains_airac_content(path: &Path) -> bool {
@@ -449,7 +481,8 @@ pub fn run_update_airac_version(
         );
     }
 
-    let changelog = download_and_extract_latest_release(&download_folder)?;
+    let (changelog, latest_version) =
+        download_and_extract_latest_release_with_version(&download_folder)?;
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
     inject_imported_sector_files(&imported_sector_folder, &content_root)?;
@@ -482,6 +515,7 @@ pub fn run_update_airac_version(
 
     let destination_lixx = euroscope_config_path.join("LIXX");
     copy_release_content(&content_root, &euroscope_config_path, &destination_lixx)?;
+    write_airac_version_file(&destination_lixx, &latest_version)?;
     patch_hoppie_code(&euroscope_config_path, &hoppie_code)?;
 
     fs::remove_dir_all(&download_folder).map_err(|error| {

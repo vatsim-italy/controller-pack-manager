@@ -29,6 +29,7 @@ pub fn run() {
             import_airac_sector_zip,
             update_airac_version,
             get_latest_airac_changelog,
+            get_latest_airac_version,
             update_plugin_version,
             get_latest_plugin_changelog,
             set_github_access_token,

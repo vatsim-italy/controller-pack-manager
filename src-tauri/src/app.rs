@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::thread::current;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -213,7 +214,8 @@ impl AppState {
             let filename_lower = filename.to_ascii_lowercase();
 
             if path.is_file()
-                && (filename_lower.contains("list") || filename.eq_ignore_ascii_case("italyCTR.txt"))
+                && (filename_lower.contains("list")
+                    || filename.eq_ignore_ascii_case("italyCTR.txt"))
                 && path
                     .extension()
                     .map(|ext| ext.to_string_lossy().eq_ignore_ascii_case("txt"))

@@ -17,6 +17,7 @@ type RadarListConfig = {
     visible: boolean;
     x: number;
     y: number;
+    line_number: number;
     ordered_by_index: number;
     columns: RadarColumn[];
 };
@@ -124,6 +125,7 @@ export const ListsSection = forwardRef<
                         visible: radarList.visible,
                         x: radarList.x,
                         y: radarList.y,
+                        line_number: radarList.line_number,
                         ordered_by_index: radarList.ordered_by_index,
                         columns: radarList.columns.map((col) => ({
                             values: col.values,
@@ -169,6 +171,7 @@ export const ListsSection = forwardRef<
             visible: resumeById.get(config.id)?.visible ?? false,
             x: resumeById.get(config.id)?.x ?? config.x,
             y: resumeById.get(config.id)?.y ?? config.y,
+            line_number: 0,
             ordered_by_index:
                 resumeById.get(config.id)?.ordered_by_index ?? config.ordered_by_index,
             columns:
@@ -751,8 +754,8 @@ export const ListsSection = forwardRef<
                     </div>
 
                     <div className="px-4 py-3 space-y-3">
-                        {/* Position Controls - Side by Side */}
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* Position Controls + Max rows */}
+                        <div className="grid grid-cols-3 gap-2">
                             <label className="text-xs text-secondary-500">
                                 X
                                 <input
@@ -778,6 +781,31 @@ export const ListsSection = forwardRef<
                                     onChange={(event) =>
                                         updateSelectedCoordinates("y", Number.parseInt(event.target.value || "0", 10))
                                     }
+                                />
+                            </label>
+
+                            <label className="text-xs text-secondary-500">
+                                Max rows
+                                <input
+                                    type="number"
+                                    className="mt-1 w-full rounded border border-secondary-500 bg-secondary-700 px-2 py-1 text-sm text-secondary-100"
+                                    value={selectedList.line_number}
+                                    min={0}
+                                    max={65535}
+                                    onChange={(event) => {
+                                        const nextValue = clamp(
+                                            Number.parseInt(event.target.value || "0", 10),
+                                            0,
+                                            65535
+                                        );
+                                        setRadarLists((previousLists) =>
+                                            previousLists.map((listConfig) =>
+                                                listConfig.id === selectedList.id
+                                                    ? { ...listConfig, line_number: nextValue }
+                                                    : listConfig
+                                            )
+                                        );
+                                    }}
                                 />
                             </label>
                         </div>

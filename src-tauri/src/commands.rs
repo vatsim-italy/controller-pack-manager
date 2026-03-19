@@ -1,5 +1,5 @@
 use crate::airac::{
-    run_get_latest_airac_changelog, run_has_imported_sector_files,
+    run_get_latest_airac_changelog, run_get_latest_airac_version, run_has_imported_sector_files,
     run_import_sector_files_from_zip, run_update_airac_version,
 };
 use crate::github_http::{clear_stored_github_token, resolve_github_token, store_github_token};
@@ -143,6 +143,13 @@ pub async fn get_latest_airac_changelog() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(run_get_latest_airac_changelog)
         .await
         .map_err(|error| format!("changelog task failed: {}", error))?
+}
+
+#[tauri::command]
+pub async fn get_latest_airac_version() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(run_get_latest_airac_version)
+        .await
+        .map_err(|error| format!("latest AIRAC version task failed: {}", error))?
 }
 
 #[tauri::command]

@@ -13,6 +13,7 @@ export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" 
 type AppProps = {
     euroscopeConfigPath: string | null;
     installedAiracVersion: string | null;
+    latestAiracVersion: string | null;
     installedPluginVersion: string | null;
     newAiracVersionAvailable: boolean | null;
     profiles: Profile[] | null;
@@ -25,6 +26,7 @@ function App(
     {
         euroscopeConfigPath,
         installedAiracVersion,
+        latestAiracVersion,
         installedPluginVersion,
         newAiracVersionAvailable,
         profiles,
@@ -163,6 +165,7 @@ function App(
             return (
                 <AiracSection
                     installedAiracVersion={installedAiracVersion}
+                    latestAiracVersion={latestAiracVersion}
                     newAiracVersionAvailable={newAiracVersionAvailable}
                     startupError={startupError}
                 />

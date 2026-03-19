@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -302,7 +303,62 @@ pub fn delete_profile_and_reload(
         )
     })?;
 
+    delete_generated_layout_folders(euroscope_config_dir, &profile_name)?;
+
     // Reload all profiles from disk
     AppState::parse_existing_profiles(euroscope_config_dir)
         .ok_or_else(|| "failed to reload profiles".to_string())
+}
+
+fn delete_generated_layout_folders(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+) -> Result<(), String> {
+    let profile_base_name = profile_name
+        .strip_suffix(".prf")
+        .or_else(|| profile_name.strip_suffix(".PRF"))
+        .unwrap_or(profile_name);
+
+    let profile_name_snake = profile_base_name
+        .replace(|c: char| c.is_whitespace() || !c.is_alphanumeric(), "_")
+        .to_lowercase()
+        .split('_')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("_");
+
+    let generated_dir = PathBuf::from(euroscope_config_dir)
+        .join("LIXX")
+        .join("Settings")
+        .join("generated")
+        .join(&profile_name_snake);
+
+    if generated_dir.exists() {
+        fs::remove_dir_all(&generated_dir).map_err(|error| {
+            format!(
+                "unable to delete generated layout directory '{}': {}",
+                generated_dir.display(),
+                error
+            )
+        })?;
+    }
+
+    if let Ok(app_data) = env::var("APPDATA") {
+        let custom_profile_dir = PathBuf::from(app_data)
+            .join("controller-pack-manager")
+            .join("custom-profiles")
+            .join(&profile_name_snake);
+
+        if custom_profile_dir.exists() {
+            fs::remove_dir_all(&custom_profile_dir).map_err(|error| {
+                format!(
+                    "unable to delete custom profile layout directory '{}': {}",
+                    custom_profile_dir.display(),
+                    error
+                )
+            })?;
+        }
+    }
+
+    Ok(())
 }
