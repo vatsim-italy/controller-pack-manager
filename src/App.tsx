@@ -129,20 +129,28 @@ function App(
                         <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
                         <div className="flex items-center gap-3">
                             {activeSection === "lists" && appProfiles && appProfiles.length > 0 && (
-                                <label className="flex items-center gap-3 text-sm text-secondary-100">
-                                    <span className="text-secondary-500 font-semibold">Profile</span>
-                                    <select
-                                        className="rounded border border-secondary-500 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 font-medium"
-                                        value={selectedProfileName || ""}
-                                        onChange={(event) => setSelectedProfileName(event.target.value)}
+                                <>
+                                    <label className="flex items-center gap-3 text-sm text-secondary-100">
+                                        <span className="text-secondary-500 font-semibold">Profile</span>
+                                        <select
+                                            className="rounded border border-secondary-500 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 font-medium"
+                                            value={selectedProfileName || ""}
+                                            onChange={(event) => setSelectedProfileName(event.target.value)}
+                                        >
+                                            {appProfiles.map((profile) => (
+                                                <option key={profile.name} value={profile.name}>
+                                                    {profile.name.replace(/\.prf$/i, "")}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
                                     >
-                                        {appProfiles.map((profile) => (
-                                            <option key={profile.name} value={profile.name}>
-                                                {profile.name.replace(/\.prf$/i, "")}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
+                                        Save Layout to Profile
+                                    </button>
+                                </>
                             )}
                             {activeSection === "sector-file" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">

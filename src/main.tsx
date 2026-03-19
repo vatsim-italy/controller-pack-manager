@@ -12,6 +12,7 @@ export type Profile = {
     certificate: string | null,
     server: string | null,
     connectToVatsim: boolean | null,
+    configuredLists: [string, string][],
     proxyServer: string | null,
 }
 

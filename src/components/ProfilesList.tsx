@@ -106,6 +106,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             server: serverAddress.trim() || null,
             proxyServer: proxyServer.trim() || null,
             connectToVatsim,
+            configuredLists: selectedProfile.configuredLists,
             cloneFrom,
         });
         if (updatedProfiles) {
@@ -123,6 +124,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             server: null,
             connectToVatsim: false,
             proxyServer: null,
+            configuredLists: new Array(),
         };
 
         setLocalProfiles((previous) => {
@@ -140,6 +142,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             server: selectedProfile.server,
             connectToVatsim: selectedProfile.connectToVatsim ?? false,
             proxyServer: selectedProfile.proxyServer,
+            configuredLists: selectedProfile.configuredLists,
         };
 
         setLocalProfiles((previous) => {

@@ -13,6 +13,7 @@ pub struct Profile {
     pub server: Option<String>,
     pub connect_to_vatsim: Option<bool>,
     pub proxy_server: Option<String>,
+    pub configured_lists: Vec<(String, String)>,
 }
 
 impl Profile {
@@ -29,22 +30,47 @@ impl Profile {
                 continue;
             }
 
-            let key = parts[1];
-            let value = parts[2..].join(" ");
-
-            match key {
-                "realname" => profile.real_name = Some(value),
-                "certificate" => profile.certificate = Some(value),
-                "server" => profile.server = Some(value),
-                "proxyserver" => profile.proxy_server = Some(value),
-                "tovatsim" => {
-                    profile.connect_to_vatsim = Some(value == "1");
+            if parts.len() >= 2 {
+                if parts[0] == "LastSession" {
+                    Self::parse_last_session_info(&mut profile, &parts);
+                } else if parts[0] == "Settings" {
+                    Self::parse_settings_info(&mut profile, &parts)
+                        .expect(format!("failed to parse profile {}", file_name).as_str());
                 }
-                _ => {}
             }
         }
 
         profile
+    }
+
+    pub fn parse_last_session_info(profile: &mut Profile, parts: &Vec<&str>) {
+        let key = parts[1];
+        let value = parts[2..].join(" ");
+
+        match key {
+            "realname" => profile.real_name = Some(value),
+            "certificate" => profile.certificate = Some(value),
+            "server" => profile.server = Some(value),
+            "proxyserver" => profile.proxy_server = Some(value),
+            "tovatsim" => {
+                profile.connect_to_vatsim = Some(value == "1");
+            }
+            _ => {}
+        }
+    }
+
+    pub fn parse_settings_info(profile: &mut Profile, parts: &Vec<&str>) -> Result<(), String> {
+        let list_id = parts[1]
+            .strip_prefix("SettingsFile")
+            .ok_or("failed to parse Setting statemnt in profile".to_string())?;
+
+        let config_file_path = parts[2..].join(" ");
+
+        profile
+            .configured_lists
+            .push((list_id.to_string(), config_file_path));
+
+        Ok(())
     }
 }
 
@@ -121,6 +147,7 @@ pub fn update_profile_and_reload(
     server: Option<String>,
     connect_to_vatsim: Option<bool>,
     proxy_server: Option<String>,
+    configured_lists: Vec<(String, String)>,
     clone_from: Option<String>,
 ) -> Result<Vec<Profile>, String> {
     let profile_to_update = Profile {
@@ -130,6 +157,7 @@ pub fn update_profile_and_reload(
         server,
         connect_to_vatsim,
         proxy_server,
+        configured_lists,
     };
 
     // Build the path to the original profile file

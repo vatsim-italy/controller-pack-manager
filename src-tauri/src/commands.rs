@@ -198,6 +198,7 @@ pub async fn update_profile(
     server: Option<String>,
     connect_to_vatsim: Option<bool>,
     proxy_server: Option<String>,
+    configured_lists: Vec<(String, String)>,
     clone_from: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Profile>, String> {
@@ -217,6 +218,7 @@ pub async fn update_profile(
         server,
         connect_to_vatsim,
         proxy_server,
+        configured_lists,
         clone_from,
     )?;
 
