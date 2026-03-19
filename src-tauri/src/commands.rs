@@ -16,9 +16,10 @@ use crate::profile::{
 use crate::settings::ListConfig;
 use crate::topsky::run_update_hoppie_code;
 use crate::AppState;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[tauri::command]
 pub fn get_detected_euroscope_config_dir(
@@ -379,13 +380,78 @@ fn run_save_layout(
 }
 
 #[tauri::command]
-pub async fn load_layout(profile_name: String) -> Result<Vec<ListConfig>, String> {
-    tauri::async_runtime::spawn_blocking(move || run_load_layout(&profile_name))
-        .await
-        .map_err(|error| format!("load layout task failed: {}", error))?
+pub async fn load_layout(
+    profile_name: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ListConfig>, String> {
+    let euroscope_config_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .ok_or_else(|| "unable to detect euroscope config folder".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_load_layout(&euroscope_config_dir, &profile_name)
+    })
+    .await
+    .map_err(|error| format!("load layout task failed: {}", error))?
 }
 
-fn run_load_layout(profile_name: &str) -> Result<Vec<ListConfig>, String> {
+fn parse_list_configs_from_content(content: &str) -> Vec<ListConfig> {
+    content
+        .split("END")
+        .map(|block| block.trim())
+        .filter(|block| !block.is_empty())
+        .filter_map(|block| ListConfig::parse(block).ok())
+        .collect()
+}
+
+fn resolve_settings_reference_path(euroscope_config_dir: &str, settings_path: &str) -> PathBuf {
+    let raw = settings_path.trim();
+    let candidate = PathBuf::from(raw);
+
+    if candidate.is_absolute() {
+        return candidate;
+    }
+
+    let cleaned = raw.trim_start_matches(['\\', '/']);
+    let mut resolved = PathBuf::from(euroscope_config_dir);
+    for segment in cleaned
+        .split(['\\', '/'])
+        .filter(|segment| !segment.is_empty())
+    {
+        resolved.push(segment);
+    }
+
+    resolved
+}
+
+fn parse_profile_settings_refs(profile_content: &str) -> Vec<(String, String)> {
+    profile_content
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 3 || !parts[0].eq_ignore_ascii_case("settings") {
+                return None;
+            }
+
+            let list_id = parts[1].strip_prefix("Settingsfile")?.to_string();
+            let path = parts[2..].join(" ");
+
+            if list_id.is_empty() || path.trim().is_empty() {
+                return None;
+            }
+
+            Some((list_id, path))
+        })
+        .collect()
+}
+
+fn run_load_layout(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+) -> Result<Vec<ListConfig>, String> {
     // Convert profile name to snake_case to match saved format
     let profile_name_snake = to_snake_case(profile_name);
 
@@ -399,37 +465,78 @@ fn run_load_layout(profile_name: &str) -> Result<Vec<ListConfig>, String> {
         .join(&profile_name_snake)
         .join("Lists.txt");
 
-    // Read the file
-    let content = fs::read_to_string(&lists_txt_path).map_err(|error| {
+    if lists_txt_path.exists() {
+        let content = fs::read_to_string(&lists_txt_path).map_err(|error| {
+            format!(
+                "unable to read Lists.txt for profile '{}': {}",
+                profile_name, error
+            )
+        })?;
+
+        let list_configs = parse_list_configs_from_content(&content);
+        if !list_configs.is_empty() {
+            return Ok(list_configs);
+        }
+    }
+
+    let profile_filename = if profile_name.ends_with(".prf") {
+        profile_name.to_string()
+    } else {
+        format!("{}.prf", profile_name)
+    };
+    let profile_path = Path::new(euroscope_config_dir).join(profile_filename);
+    let profile_content = fs::read_to_string(&profile_path).map_err(|error| {
         format!(
-            "unable to read Lists.txt for profile '{}': {}",
-            profile_name, error
+            "unable to read profile file '{}' for layout recovery: {}",
+            profile_path.display(),
+            error
         )
     })?;
 
-    // Parse the content: each ListConfig block is separated by "END"
-    let list_configs: Vec<ListConfig> = content
-        .split("END")
-        .map(|block| block.trim())
-        .filter(|block| !block.is_empty())
-        .filter_map(|block| {
-            // Each block needs to have the ID restored by adding it back to the start
-            match ListConfig::parse(block) {
-                Ok(config) => Some(config),
-                Err(e) => {
-                    eprintln!("warning: failed to parse list config block: {}", e);
-                    None
-                }
-            }
-        })
-        .collect();
-
-    if list_configs.is_empty() {
+    let settings_refs = parse_profile_settings_refs(&profile_content);
+    if settings_refs.is_empty() {
         return Err(format!(
             "no list configurations found in saved layout for profile '{}'",
             profile_name
         ));
     }
 
-    Ok(list_configs)
+    let mut parsed_by_id: HashMap<String, ListConfig> = HashMap::new();
+    let mut visited_paths: HashSet<PathBuf> = HashSet::new();
+
+    for (_, settings_path) in &settings_refs {
+        let resolved_path = resolve_settings_reference_path(euroscope_config_dir, settings_path);
+        if !visited_paths.insert(resolved_path.clone()) {
+            continue;
+        }
+
+        let Ok(content) = fs::read_to_string(&resolved_path) else {
+            continue;
+        };
+
+        for config in parse_list_configs_from_content(&content) {
+            parsed_by_id.entry(config.id.clone()).or_insert(config);
+        }
+    }
+
+    let mut recovered_configs: Vec<ListConfig> = Vec::new();
+    let mut used_ids: HashSet<String> = HashSet::new();
+    for (list_id, _) in settings_refs {
+        if !used_ids.insert(list_id.clone()) {
+            continue;
+        }
+
+        if let Some(config) = parsed_by_id.remove(&list_id) {
+            recovered_configs.push(config);
+        }
+    }
+
+    if recovered_configs.is_empty() {
+        return Err(format!(
+            "no list configurations found in saved layout for profile '{}'",
+            profile_name
+        ));
+    }
+
+    Ok(recovered_configs)
 }
