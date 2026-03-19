@@ -4,12 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface ProfilesListProps {
     profiles: Profile[] | null;
+    onProfilesUpdate?: () => void;
 }
 
 const withFallback = (value: string | null, fallback = "") => value ?? fallback;
 const stripPrf = (value: string) => value.replace(/\.prf$/i, "");
 
-export const ProfilesList = ({ profiles }: ProfilesListProps) => {
+export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) => {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="card card-accent">
@@ -110,6 +111,7 @@ export const ProfilesList = ({ profiles }: ProfilesListProps) => {
         if (updatedProfiles) {
             setLocalProfiles(updatedProfiles);
             setSaveSuccess(true);
+            onProfilesUpdate?.();
         }
     };
 
@@ -173,6 +175,7 @@ export const ProfilesList = ({ profiles }: ProfilesListProps) => {
                 });
                 if (updatedProfiles) {
                     setLocalProfiles(updatedProfiles);
+                    onProfilesUpdate?.();
                 }
             }
 

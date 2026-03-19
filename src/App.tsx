@@ -6,6 +6,7 @@ import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
 import { ListsSection } from "./components";
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists";
 
@@ -34,12 +35,28 @@ function App(
 ) {
     const [activeSection, setActiveSection] = useState<DashboardSection>("sector-file");
     const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null);
+    const [appProfiles, setAppProfiles] = useState<Profile[] | null>(profiles);
+
+    const refreshProfiles = async () => {
+        try {
+            const updatedProfiles = await invoke<Profile[] | null>("get_existing_profiles");
+            if (updatedProfiles) {
+                setAppProfiles(updatedProfiles);
+            }
+        } catch (error) {
+            console.error("Failed to refresh profiles:", error);
+        }
+    };
+
+    const handleProfilesUpdate = () => {
+        refreshProfiles();
+    };
 
     useEffect(() => {
-        if (profiles && profiles.length > 0 && !selectedProfileName) {
-            setSelectedProfileName(profiles[0].name);
+        if (appProfiles && appProfiles.length > 0 && !selectedProfileName) {
+            setSelectedProfileName(appProfiles[0].name);
         }
-    }, [profiles, selectedProfileName]);
+    }, [appProfiles, selectedProfileName]);
 
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
@@ -90,7 +107,7 @@ function App(
         }
 
         if (activeSection === "profiles") {
-            return <ProfilesList profiles={profiles} />;
+            return <ProfilesList profiles={appProfiles} onProfilesUpdate={handleProfilesUpdate} />;
         }
 
         if (activeSection === "lists") {
@@ -111,7 +128,7 @@ function App(
                     <div className="flex items-start justify-between gap-3">
                         <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
                         <div className="flex items-center gap-3">
-                            {activeSection === "lists" && profiles && profiles.length > 0 && (
+                            {activeSection === "lists" && appProfiles && appProfiles.length > 0 && (
                                 <label className="flex items-center gap-3 text-sm text-secondary-100">
                                     <span className="text-secondary-500 font-semibold">Profile</span>
                                     <select
@@ -119,7 +136,7 @@ function App(
                                         value={selectedProfileName || ""}
                                         onChange={(event) => setSelectedProfileName(event.target.value)}
                                     >
-                                        {profiles.map((profile) => (
+                                        {appProfiles.map((profile) => (
                                             <option key={profile.name} value={profile.name}>
                                                 {profile.name.replace(/\.prf$/i, "")}
                                             </option>
