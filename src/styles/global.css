@@ -52,6 +52,7 @@
         letter-spacing: 0;
         line-height: 1.15;
         text-rendering: geometricPrecision;
+        font-size: 11px;
     }
 
     .btn-primary {

@@ -72,11 +72,31 @@ const placeholderValueForColumn = (columnId: string, widthChars: number) => {
     return `${columnId}${" ".repeat(widthChars - columnId.length)}`;
 };
 
+const measureCharacterWidth = (): number => {
+    const testString = "abcdefghijklmnopqrstuvwxyz";
+    const testEl = document.createElement("span");
+    testEl.style.position = "absolute";
+    testEl.style.visibility = "hidden";
+    testEl.style.fontFamily = '"EuroScope", "Consolas", "Lucida Console", monospace';
+    testEl.style.fontSize = "11px";
+    testEl.style.fontVariantLigatures = "none";
+    testEl.style.letterSpacing = "0";
+    testEl.style.lineHeight = "1.15";
+    testEl.textContent = testString;
+
+    document.body.appendChild(testEl);
+    const width = testEl.getBoundingClientRect().width;
+    document.body.removeChild(testEl);
+
+    return width / testString.length;
+};
+
 export const ListsSection = forwardRef<
     { getCurrentLayout: () => ListConfig[] | null },
     ListsSectionProps
 >(({ listConfigs, resumeLayout }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
+    const charWidth = useMemo(() => measureCharacterWidth(), []);
 
     const [resolution, setResolution] = useState<RadarResolutionKey>(() => {
         const customRes = RADAR_RESOLUTIONS.custom;
@@ -467,6 +487,8 @@ export const ListsSection = forwardRef<
                     {visibleRadarLists.map((listConfig) => {
                         const visibleColumns = listConfig.columns.filter((column) => isColumnVisible(column.values));
                         const totalWidth = visibleColumns.reduce((sum, column) => sum + columnWidthChars(column.values), 0);
+                        const gapsWidth = Math.max(0, visibleColumns.length - 1) * (charWidth * 0.5);
+                        const totalWidthPx = totalWidth * charWidth + gapsWidth;
 
                         return (
                             <div
@@ -476,7 +498,7 @@ export const ListsSection = forwardRef<
                                 style={{
                                     left: `${listConfig.x}px`,
                                     top: `${listConfig.y}px`,
-                                    width: `${totalWidth}ch`,
+                                    width: `${totalWidthPx}px`,
                                 }}
                                 onPointerDown={(event) => handlePointerDown(event, listConfig)}
                             >
@@ -498,20 +520,19 @@ export const ListsSection = forwardRef<
                                     </button>
                                 </div>
 
-                                <table className="w-full border-collapse text-xs leading-tight">
+                                <table className="w-full border-collapse leading-tight" style={{ borderCollapse: "separate", borderSpacing: `${charWidth * 0.5}px 0px`, fontSize: "inherit" }}>
                                     <thead>
                                         <tr>
                                             {visibleColumns.map((column) => {
                                                 const widthChars = columnWidthChars(column.values);
+                                                const widthPx = widthChars * charWidth;
                                                 return (
                                                     <th
                                                         key={`${listConfig.id}-header-${column.values.join("|")}`}
-                                                        className="border-b border-secondary-600 px-1 py-0.5 text-left font-semibold text-secondary-100"
-                                                        style={{ width: `${widthChars}ch`, overflow: "hidden" }}
+                                                        className="border-b border-secondary-600 text-center font-semibold text-secondary-100"
+                                                        style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
                                                     >
-                                                        <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
-                                                            {columnIdFromValues(column.values)}
-                                                        </span>
+                                                        {columnIdFromValues(column.values)}
                                                     </th>
                                                 );
                                             })}
@@ -522,15 +543,14 @@ export const ListsSection = forwardRef<
                                             {visibleColumns.map((column) => {
                                                 const columnId = columnIdFromValues(column.values);
                                                 const widthChars = columnWidthChars(column.values);
+                                                const widthPx = widthChars * charWidth;
                                                 return (
                                                     <td
                                                         key={`${listConfig.id}-row-0-${column.values.join("|")}`}
-                                                        className="px-1 py-0.5 text-secondary-100"
-                                                        style={{ width: `${widthChars}ch`, overflow: "hidden" }}
+                                                        className="text-secondary-100"
+                                                        style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
                                                     >
-                                                        <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
-                                                            {placeholderValueForColumn(columnId, widthChars)}
-                                                        </span>
+                                                        {placeholderValueForColumn(columnId, widthChars)}
                                                     </td>
                                                 );
                                             })}
