@@ -1,11 +1,11 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ListColumn {
     pub values: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ListConfig {
     pub id: String,
     pub visible: bool,

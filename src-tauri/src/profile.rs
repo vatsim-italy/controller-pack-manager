@@ -61,7 +61,7 @@ impl Profile {
 
     pub fn parse_settings_info(profile: &mut Profile, parts: &Vec<&str>) -> Result<(), String> {
         let list_id = parts[1]
-            .strip_prefix("SettingsFile")
+            .strip_prefix("Settingsfile")
             .ok_or("failed to parse Setting statemnt in profile".to_string())?;
 
         let config_file_path = parts[2..].join(" ");
@@ -98,6 +98,62 @@ pub fn profile_patch_lines(profile: &Profile) -> Vec<String> {
     }
 
     lines
+}
+
+pub fn patch_profile_settings_lines(
+    profile_file_path: &Path,
+    list_ids: Vec<String>,
+    settings_path: &str,
+) -> Result<(), String> {
+    let content = fs::read_to_string(profile_file_path).map_err(|error| {
+        format!(
+            "unable to read profile '{}': {}",
+            profile_file_path.display(),
+            error
+        )
+    })?;
+
+    // Filter out Settings lines for the list IDs we're updating
+    let mut kept_lines: Vec<String> = content
+        .lines()
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            if lower.starts_with("settings\tsettingsfile") {
+                // Extract the list ID from the line
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() >= 2 {
+                    if let Some(id_part) = parts[1].strip_prefix("Settingsfile") {
+                        // Check if this list ID is in our list_ids
+                        return !list_ids.iter().any(|lid| lid == id_part);
+                    }
+                }
+            }
+            true
+        })
+        .map(|line| line.to_string())
+        .collect();
+
+    // Add new Settings lines for each list ID
+    for list_id in &list_ids {
+        kept_lines.push(format!(
+            "Settings\tSettingsfile{}\t{}",
+            list_id, settings_path
+        ));
+    }
+
+    let mut patched = kept_lines.join("\n");
+
+    if !patched.is_empty() {
+        patched.push('\n');
+    }
+
+    fs::write(profile_file_path, patched).map_err(|error| {
+        format!(
+            "unable to write patched profile '{}': {}",
+            profile_file_path.display(),
+            error
+        )
+    })
 }
 
 pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result<(), String> {

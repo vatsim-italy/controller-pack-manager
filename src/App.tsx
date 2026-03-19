@@ -5,7 +5,7 @@ import { AiracSection } from "./components/AiracSection";
 import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
 import { ListsSection } from "./components";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists";
@@ -36,6 +36,10 @@ function App(
     const [activeSection, setActiveSection] = useState<DashboardSection>("sector-file");
     const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null);
     const [appProfiles, setAppProfiles] = useState<Profile[] | null>(profiles);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const listsSectionRef = useRef<{ getCurrentLayout: () => ListConfig[] | null }>(null);
 
     const refreshProfiles = async () => {
         try {
@@ -50,6 +54,40 @@ function App(
 
     const handleProfilesUpdate = () => {
         refreshProfiles();
+    };
+
+    const handleSaveLayout = async () => {
+        if (!selectedProfileName || !listsSectionRef.current) {
+            setSaveError("No profile selected or lists section not available");
+            return;
+        }
+
+        setIsSaving(true);
+        setSaveSuccess(false);
+        setSaveError(null);
+
+        try {
+            const currentLayout = listsSectionRef.current.getCurrentLayout();
+            if (!currentLayout || currentLayout.length === 0) {
+                setSaveError("No lists to save");
+                setIsSaving(false);
+                return;
+            }
+
+            await invoke("save_layout", {
+                profileName: selectedProfileName.replace(/\.prf$/i, ""),
+                listConfigs: currentLayout,
+            });
+
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setSaveError(errorMessage);
+            setTimeout(() => setSaveError(null), 5000);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     useEffect(() => {
@@ -111,7 +149,7 @@ function App(
         }
 
         if (activeSection === "lists") {
-            return <ListsSection listConfigs={listConfigs} />;
+            return <ListsSection listConfigs={listConfigs} ref={listsSectionRef} />;
         }
 
         return <HoppieSection hoppieCode={hoppieCode} />;
@@ -129,7 +167,7 @@ function App(
                         <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
                         <div className="flex items-center gap-3">
                             {activeSection === "lists" && appProfiles && appProfiles.length > 0 && (
-                                <>
+                                <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-3 text-sm text-secondary-100">
                                         <span className="text-secondary-500 font-semibold">Profile</span>
                                         <select
@@ -146,11 +184,19 @@ function App(
                                     </label>
                                     <button
                                         type="button"
-                                        className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
+                                        className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                        onClick={handleSaveLayout}
+                                        disabled={isSaving}
                                     >
-                                        Save Layout to Profile
+                                        {isSaving ? "Saving..." : saveSuccess ? "✓ Saved!" : "Save Layout to Profile"}
                                     </button>
-                                </>
+                                    {saveError && (
+                                        <div className="rounded border border-accent-danger bg-accent-danger/10 px-3 py-2 text-sm font-medium text-accent-danger flex items-center gap-2">
+                                            <span>✕</span>
+                                            <span>{saveError}</span>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                             {activeSection === "sector-file" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">

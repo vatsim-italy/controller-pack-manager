@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { ListConfig } from "../main";
 
 interface ListsSectionProps {
@@ -70,7 +70,10 @@ const placeholderValueForColumn = (columnId: string, widthChars: number) => {
     return `${columnId}${" ".repeat(widthChars - columnId.length)}`;
 };
 
-export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
+export const ListsSection = forwardRef<
+    { getCurrentLayout: () => ListConfig[] | null },
+    ListsSectionProps
+>(({ listConfigs }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
 
     const [resolution, setResolution] = useState<RadarResolutionKey>(() => {
@@ -92,6 +95,43 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const addListSearchInputRef = useRef<HTMLInputElement | null>(null);
+
+    // Expose getCurrentLayout method via ref
+    useImperativeHandle(ref, () => ({
+        getCurrentLayout: () => {
+            if (!listConfigs) {
+                return null;
+            }
+
+            // Get currently visible lists
+            const visibleLists = radarLists.filter((list) => list.visible);
+
+            if (visibleLists.length === 0) {
+                return null;
+            }
+
+            // Map radarLists back to ListConfig format by merging with original data
+            return visibleLists
+                .map((radarList) => {
+                    const originalConfig = listConfigs.find((config) => config.id === radarList.id);
+                    if (!originalConfig) {
+                        return null;
+                    }
+
+                    return {
+                        ...originalConfig,
+                        visible: radarList.visible,
+                        x: radarList.x,
+                        y: radarList.y,
+                        ordered_by_index: radarList.ordered_by_index,
+                        columns: radarList.columns.map((col) => ({
+                            values: col.values,
+                        })),
+                    };
+                })
+                .filter((config): config is ListConfig => config !== null);
+        },
+    }), [listConfigs, radarLists]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -791,4 +831,6 @@ export const ListsSection = ({ listConfigs }: ListsSectionProps) => {
             )}
         </div>
     );
-};
+});
+
+ListsSection.displayName = "ListsSection";

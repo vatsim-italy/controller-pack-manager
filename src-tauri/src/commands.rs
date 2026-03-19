@@ -10,10 +10,15 @@ use crate::plugin::{
     run_get_latest_plugin_changelog, run_update_plugin_version,
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
-use crate::profile::{delete_profile_and_reload, update_profile_and_reload, Profile};
+use crate::profile::{
+    delete_profile_and_reload, patch_profile_settings_lines, update_profile_and_reload, Profile,
+};
 use crate::settings::ListConfig;
 use crate::topsky::run_update_hoppie_code;
 use crate::AppState;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
 
 #[tauri::command]
 pub fn get_detected_euroscope_config_dir(
@@ -257,4 +262,108 @@ pub fn get_list_configs(
         .lock()
         .map_err(|error| error.to_string())
         .map(|lock| lock.clone())
+}
+
+#[tauri::command]
+pub async fn save_layout(
+    profile_name: String,
+    list_configs: Vec<ListConfig>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let euroscope_config_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .ok_or_else(|| "unable to detect euroscope config folder".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_save_layout(&euroscope_config_dir, &profile_name, list_configs)
+    })
+    .await
+    .map_err(|error| format!("save layout task failed: {}", error))?
+}
+
+fn to_snake_case(input: &str) -> String {
+    input
+        .replace(|c: char| c.is_whitespace() || !c.is_alphanumeric(), "_")
+        .to_lowercase()
+        .split('_')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+fn run_save_layout(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+    list_configs: Vec<ListConfig>,
+) -> Result<(), String> {
+    // Convert profile name to snake_case for file paths (handles spaces and special chars)
+    let profile_name_snake = to_snake_case(profile_name);
+
+    // Step 1: Create custom-profiles directory structure
+    let appdata = env::var("APPDATA")
+        .map_err(|error| format!("unable to get APPDATA environment variable: {}", error))?;
+
+    let custom_profiles_dir = PathBuf::from(&appdata)
+        .join("controller-pack-manager")
+        .join("custom-profiles")
+        .join(&profile_name_snake);
+
+    fs::create_dir_all(&custom_profiles_dir)
+        .map_err(|error| format!("unable to create custom profiles directory: {}", error))?;
+
+    // Step 2: Create Lists.txt with serialized configurations
+    let lists_txt_path = custom_profiles_dir.join("Lists.txt");
+    let lists_content = list_configs
+        .iter()
+        .map(|config| config.to_string())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    fs::write(&lists_txt_path, &lists_content)
+        .map_err(|error| format!("unable to write Lists.txt: {}", error))?;
+
+    // Step 3: Copy to EuroScope Settings/generated directory
+    let euroscope_generated_dir = PathBuf::from(euroscope_config_dir)
+        .join("LIXX")
+        .join("Settings")
+        .join("generated")
+        .join(&profile_name_snake);
+
+    fs::create_dir_all(&euroscope_generated_dir)
+        .map_err(|error| format!("unable to create euroscope generated directory: {}", error))?;
+
+    let euroscope_lists_txt_path = euroscope_generated_dir.join("Lists.txt");
+    fs::copy(&lists_txt_path, &euroscope_lists_txt_path)
+        .map_err(|error| format!("unable to copy Lists.txt to euroscope directory: {}", error))?;
+
+    // Step 4: Patch the profile file with Settings entries
+    let mut profile_path = PathBuf::from(euroscope_config_dir);
+
+    // Add .prf extension if not already present
+    let profile_filename = if profile_name.ends_with(".prf") {
+        profile_name.to_string()
+    } else {
+        format!("{}.prf", profile_name)
+    };
+
+    profile_path.push(&profile_filename);
+
+    // Extract list IDs from the configurations
+    let list_ids: Vec<String> = list_configs
+        .iter()
+        .map(|config| config.id.clone())
+        .collect();
+
+    // Build the settings path for the profile (relative EuroScope path with snake_case)
+    let settings_path = format!(
+        "\\LIXX\\Settings\\generated\\{}\\Lists.txt",
+        profile_name_snake
+    );
+
+    patch_profile_settings_lines(&profile_path, list_ids, &settings_path)?;
+
+    Ok(())
 }
