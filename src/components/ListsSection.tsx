@@ -184,20 +184,21 @@ export const ListsSection = forwardRef<
 
         const resumeById = new Map((resumeLayout ?? []).map((config) => [config.id, config]));
 
-        const normalized = listConfigs.map((config) => ({
-            // Base pool should not depend on currently selected profile configuration.
-            // Resume data, when available, is applied as an overlay.
-            id: config.id,
-            visible: resumeById.get(config.id)?.visible ?? false,
-            x: resumeById.get(config.id)?.x ?? config.x,
-            y: resumeById.get(config.id)?.y ?? config.y,
-            line_number: 0,
-            ordered_by_index:
-                resumeById.get(config.id)?.ordered_by_index ?? config.ordered_by_index,
-            columns:
-                resumeById.get(config.id)?.columns.map((column) => ({ values: [...column.values] }))
-                ?? config.columns.map((column) => ({ values: [...column.values] })),
-        }));
+        const normalized = listConfigs.map((config) => {
+            const resumedConfig = resumeById.get(config.id);
+
+            return {
+                id: config.id,
+                visible: resumedConfig?.visible ?? false,
+                x: resumedConfig?.x ?? config.x,
+                y: resumedConfig?.y ?? config.y,
+                line_number: resumedConfig?.line_number ?? 0,
+                ordered_by_index: resumedConfig?.ordered_by_index ?? config.ordered_by_index,
+                columns: (resumedConfig?.columns ?? config.columns).map((column) => ({
+                    values: [...column.values],
+                })),
+            };
+        });
 
         setRadarLists(normalized);
         setSelectedListId(null);
@@ -221,6 +222,14 @@ export const ListsSection = forwardRef<
     const visibleRadarLists = useMemo(
         () => radarLists.filter((listConfig) => listConfig.visible),
         [radarLists]
+    );
+
+    const availableListsForAdd = useMemo(
+        () => radarLists
+            .filter((list) => !list.visible)
+            .filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase()))
+            .filter((list, index, self) => self.findIndex(l => l.id === list.id) === index),
+        [radarLists, addListSearchQuery]
     );
 
     const selectedList = useMemo(
@@ -702,9 +711,7 @@ export const ListsSection = forwardRef<
                             />
                         </div>
 
-                        {radarLists
-                            .filter((list) => !list.visible)
-                            .filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase()))
+                        {availableListsForAdd
                             .map((listConfig) => (
                                 <button
                                     key={listConfig.id}
@@ -715,7 +722,7 @@ export const ListsSection = forwardRef<
                                     {listConfig.id}
                                 </button>
                             ))}
-                        {radarLists.filter((list) => !list.visible).filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase())).length === 0 &&
+                        {availableListsForAdd.length === 0 &&
                             !radarLists.every((list) => list.visible) && (
                                 <div className="px-3 py-2 text-xs text-secondary-500">No lists found</div>
                             )}

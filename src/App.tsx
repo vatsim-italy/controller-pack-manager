@@ -133,6 +133,25 @@ function App(
         };
     }, [selectedProfileName]);
 
+    useEffect(() => {
+        // Clear loaded configs when leaving Lists section to force reload on return
+        if (activeSection !== "lists") {
+            setLoadedConfigs(null);
+        } else if (activeSection === "lists" && !loadedConfigs && selectedProfileName) {
+            // Re-fetch layout when returning to Lists section
+            (async () => {
+                try {
+                    const loadedLayout = await invoke<ListConfig[]>("load_layout", {
+                        profileName: selectedProfileName.replace(/\.prf$/i, ""),
+                    });
+                    setLoadedConfigs(loadedLayout);
+                } catch {
+                    setLoadedConfigs(null);
+                }
+            })();
+        }
+    }, [activeSection, selectedProfileName]);
+
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
             "sector-file": {
