@@ -327,7 +327,7 @@ fn run_save_layout(
         .iter()
         .map(|config| config.to_string())
         .collect::<Vec<_>>()
-        .join("\n\n");
+        .join("\n");
 
     fs::write(&lists_txt_path, &lists_content)
         .map_err(|error| format!("unable to write Lists.txt: {}", error))?;
