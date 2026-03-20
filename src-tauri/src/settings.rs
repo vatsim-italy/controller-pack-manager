@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -69,6 +70,7 @@ pub struct ScreenConfig {
     pub connect_sel_to_sil: bool,
     pub connect_dep_to_sel: bool,
     pub connect_sil_to_top: bool,
+    #[serde(default)]
     pub source: String,
 }
 
@@ -117,7 +119,7 @@ impl fmt::Display for ControllerListConfig {
             m_ShowATISControllers:{}\n\
             m_ShowOBSControllers:{}\n\
             m_ControllerListX:{}\n\
-            m_ControllerListY:{}\n",
+            m_ControllerListY:{}",
             self.visible as u8,
             self.fss as u8,
             self.ctr as u8,
@@ -175,7 +177,7 @@ impl fmt::Display for TitleBarConfig {
             m_ShowTitleClock:{}\n\
             m_ShowTitleLeader:{}\n\
             m_ShowTitleFilter:{}\n\
-            m_ShowTitleTrans:{}\n",
+            m_ShowTitleTrans:{}",
             self.visible as u8,
             self.file_name as u8,
             self.controller_name as u8,
@@ -222,7 +224,7 @@ impl fmt::Display for MetarListConfig {
             "m_METARList:{}\n\
             m_ShowTitleMetar:{}\n\
             m_MetarListX:{}\n\
-            m_MetarListY:{}\n",
+            m_MetarListY:{}",
             self.visible as u8, self.title as u8, self.x, self.y,
         )
     }
@@ -259,7 +261,7 @@ impl fmt::Display for DisplayConfig {
             f,
             "m_ScreenNumber:{}\n\
             m_ScreenPosition:{}\n\
-            m_ScreenMaximized:{}\n",
+            m_ScreenMaximized:{}",
             self.id, self.position, self.maximized as u8,
         )
     }
@@ -299,48 +301,41 @@ impl ScreenConfig {
 
 impl fmt::Display for ScreenConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let output = format!(
-            "{}\n\
-            {}\n\
-            {}\n\
-            {}\n\
-            m_ConnectSELtoSIL:{}\n\
-            m_ConnectDEPtoSEL:{}\n\
-            m_ConnectSILtoTOP:{}\n",
-            self.controller_list,
-            self.metar_list,
-            self.title_bar,
-            self.display_config,
-            self.connect_sel_to_sil as u8,
-            self.connect_dep_to_sel as u8,
-            self.connect_sil_to_top as u8,
-        );
+        let mut output_lines = vec![
+            format!("{}", self.controller_list),
+            format!("{}", self.metar_list),
+            format!("{}", self.title_bar),
+            format!("{}", self.display_config),
+            format!("m_ConnectSELtoSIL:{}", self.connect_sel_to_sil as u8),
+            format!("m_ConnectDEPtoSEL:{}", self.connect_dep_to_sel as u8),
+            format!("m_ConnectDEPtoSIL:{}", self.connect_dep_to_sel as u8),
+            format!("m_ConnectSILtoTOP:{}", self.connect_sil_to_top as u8),
+        ];
 
-        let written_keys: Vec<&str> = output
-            .lines()
-            .map(|line| {
-                line.split(':')
-                    .map(|part| part.trim())
-                    .nth(0)
-                    .expect("we literally just constructed it")
-            })
+        let mut written_keys: HashSet<String> = output_lines
+            .iter()
+            .filter_map(|line| line.split_once(':').map(|(key, _)| key.trim().to_string()))
             .collect();
 
-        let untouched_lines: Vec<&str> = self
+        let untouched_lines: Vec<String> = self
             .source
             .lines()
-            .filter(|line| {
-                let key = line
-                    .split(':')
-                    .map(|part| part.trim())
-                    .nth(0)
-                    .expect("we literally just parsed it");
-
-                !written_keys.contains(&key)
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                if let Some((key, _)) = line.split_once(':') {
+                    let trimmed_key = key.trim().to_string();
+                    if written_keys.contains(&trimmed_key) {
+                        return None;
+                    }
+                    written_keys.insert(trimmed_key);
+                }
+                Some(line.to_string())
             })
             .collect();
 
-        write!(f, "{}{}\n", output, untouched_lines.join("\n"))
+        output_lines.extend(untouched_lines);
+        write!(f, "{}\n", output_lines.join("\n"))
     }
 }
 

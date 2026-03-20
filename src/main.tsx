@@ -14,6 +14,7 @@ export type Profile = {
     connectToVatsim: boolean | null,
     configuredLists: [string, string][],
     proxyServer: string | null,
+    screenConfig: ScreenConfig | null,
 }
 
 export type ListColumn = {
@@ -30,6 +31,54 @@ export type ListConfig = {
     ordered_by_index: number,
     header_only: boolean,
     columns: ListColumn[],
+}
+
+export type ControllerListConfig = {
+    visible: boolean,
+    x: number,
+    y: number,
+    fss: boolean,
+    ctr: boolean,
+    app: boolean,
+    twr: boolean,
+    gnd: boolean,
+    atis: boolean,
+    obs: boolean,
+}
+
+export type TitleBarConfig = {
+    visible: boolean,
+    file_name: boolean,
+    controller_name: boolean,
+    primary_frequency: boolean,
+    atis_frequency: boolean,
+    clock: boolean,
+    leader: boolean,
+    filter: boolean,
+    transition_level: boolean,
+}
+
+export type MetarListConfig = {
+    visible: boolean,
+    x: number,
+    y: number,
+    title: boolean,
+}
+
+export type DisplayConfig = {
+    id: number,
+    position: number,
+    maximized: boolean,
+}
+
+export type ScreenConfig = {
+    controller_list: ControllerListConfig,
+    metar_list: MetarListConfig,
+    title_bar: TitleBarConfig,
+    display_config: DisplayConfig,
+    connect_sel_to_sil: boolean,
+    connect_dep_to_sel: boolean,
+    connect_sil_to_top: boolean,
 }
 
 const renderApp = (

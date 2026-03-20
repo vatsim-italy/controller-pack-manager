@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Profile } from "../main";
+import { Profile, ScreenConfig } from "../main";
 import { invoke } from "@tauri-apps/api/core";
+import { ScreenConfigSection } from "./ScreenConfigSection";
 
 interface ProfilesListProps {
     profiles: Profile[] | null;
+    selectedProfileName?: string | null;
+    onSelectProfileName?: (name: string) => void;
     onProfilesUpdate?: () => void;
 }
 
 const withFallback = (value: string | null, fallback = "") => value ?? fallback;
 const stripPrf = (value: string) => value.replace(/\.prf$/i, "");
 
-export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) => {
+export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileName, onProfilesUpdate }: ProfilesListProps) => {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="card card-accent">
@@ -40,9 +43,25 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
 
     useEffect(() => {
         setLocalProfiles(profiles);
-        setSelectedIndex(0);
+        if (selectedProfileName) {
+            const matchingIndex = profiles.findIndex((profile) => profile.name === selectedProfileName);
+            setSelectedIndex(matchingIndex >= 0 ? matchingIndex : 0);
+        } else {
+            setSelectedIndex(0);
+        }
         setIsAdvancedOpen(false);
-    }, [profiles]);
+    }, [profiles, selectedProfileName]);
+
+    useEffect(() => {
+        if (!selectedProfileName) {
+            return;
+        }
+
+        const matchingIndex = localProfiles.findIndex((profile) => profile.name === selectedProfileName);
+        if (matchingIndex >= 0 && matchingIndex !== selectedIndex) {
+            setSelectedIndex(matchingIndex);
+        }
+    }, [selectedProfileName, localProfiles, selectedIndex]);
 
     useEffect(() => {
         if (saveSuccess) {
@@ -73,6 +92,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
     const [serverAddress, setServerAddress] = useState(withFallback(selectedProfile.server));
     const [proxyServer, setProxyServer] = useState(withFallback(selectedProfile.proxyServer));
     const [connectToVatsim, setConnectToVatsim] = useState(selectedProfile.connectToVatsim ?? false);
+    const [screenConfig, setScreenConfig] = useState<ScreenConfig | null>(selectedProfile.screenConfig ?? null);
 
     useEffect(() => {
         setProfileName(stripPrf(selectedProfile.name));
@@ -81,6 +101,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
         setServerAddress(withFallback(selectedProfile.server));
         setProxyServer(withFallback(selectedProfile.proxyServer));
         setConnectToVatsim(selectedProfile.connectToVatsim ?? false);
+        setScreenConfig(selectedProfile.screenConfig ?? null);
         setIsAdvancedOpen(false);
     }, [selectedProfile]);
 
@@ -110,7 +131,49 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             cloneFrom,
         });
         if (updatedProfiles) {
-            setLocalProfiles(updatedProfiles);
+            let profilesWithScreenConfig = updatedProfiles;
+
+            // Save screen config if changes were made
+            if (screenConfig) {
+                try {
+                    const profileNameNoExt = renamed.replace(/\.prf$/i, "");
+                    let latestScreenConfig: ScreenConfig | null = null;
+
+                    try {
+                        latestScreenConfig = await invoke<ScreenConfig>("load_screen_config", {
+                            profileName: profileNameNoExt,
+                        });
+                    } catch {
+                        latestScreenConfig = null;
+                    }
+
+                    const mergedScreenConfig: ScreenConfig = {
+                        controller_list: latestScreenConfig?.controller_list ?? screenConfig.controller_list,
+                        metar_list: latestScreenConfig?.metar_list ?? screenConfig.metar_list,
+                        title_bar: screenConfig.title_bar,
+                        display_config: screenConfig.display_config,
+                        connect_sel_to_sil: screenConfig.connect_sel_to_sil,
+                        connect_dep_to_sel: screenConfig.connect_dep_to_sel,
+                        connect_sil_to_top: screenConfig.connect_sil_to_top,
+                    };
+
+                    await invoke<string>("save_screen_config", {
+                        profileName: profileNameNoExt,
+                        screenConfig: mergedScreenConfig,
+                    });
+
+                    profilesWithScreenConfig = updatedProfiles.map((profile) =>
+                        profile.name === renamed
+                            ? { ...profile, screenConfig: mergedScreenConfig }
+                            : profile
+                    );
+                } catch (error) {
+                    console.error("Failed to save screen config:", error);
+                }
+            }
+
+            setLocalProfiles(profilesWithScreenConfig);
+
             setSaveSuccess(true);
             onProfilesUpdate?.();
         }
@@ -125,6 +188,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             connectToVatsim: false,
             proxyServer: null,
             configuredLists: new Array(),
+            screenConfig: null,
         };
 
         setLocalProfiles((previous) => {
@@ -143,6 +207,7 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
             connectToVatsim: selectedProfile.connectToVatsim ?? false,
             proxyServer: selectedProfile.proxyServer,
             configuredLists: selectedProfile.configuredLists,
+            screenConfig: selectedProfile.screenConfig,
         };
 
         setLocalProfiles((previous) => {
@@ -204,7 +269,10 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
                                 <button
                                     key={`${profile.name}-${index}`}
                                     type="button"
-                                    onClick={() => setSelectedIndex(index)}
+                                    onClick={() => {
+                                        setSelectedIndex(index);
+                                        onSelectProfileName?.(profile.name);
+                                    }}
                                     className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all flex items-center gap-1.5 ${isActive
                                         ? "border-primary-600 bg-primary-600 text-white"
                                         : "border-secondary-600 bg-secondary-700 text-secondary-100 hover:border-secondary-500"
@@ -274,6 +342,13 @@ export const ProfilesList = ({ profiles, onProfilesUpdate }: ProfilesListProps) 
                             />
                         </label>
                     </div>
+
+                    <ScreenConfigSection
+                        screenConfig={screenConfig}
+                        onChange={(newConfig) => {
+                            setScreenConfig(newConfig);
+                        }}
+                    />
 
                     <div className="overflow-hidden rounded-xl border border-secondary-600 bg-secondary-700/30">
                         <button

@@ -11,9 +11,10 @@ use crate::plugin::{
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
 use crate::profile::{
-    delete_profile_and_reload, patch_profile_settings_lines, update_profile_and_reload, Profile,
+    delete_profile_and_reload, patch_profile_screen_settings_line, patch_profile_settings_lines,
+    update_profile_and_reload, Profile,
 };
-use crate::settings::ListConfig;
+use crate::settings::{ControllerListConfig, ListConfig, ScreenConfig, TitleBarConfig};
 use crate::topsky::run_update_hoppie_code;
 use crate::AppState;
 use std::collections::{HashMap, HashSet};
@@ -539,4 +540,327 @@ fn run_load_layout(
     }
 
     Ok(recovered_configs)
+}
+
+#[tauri::command]
+pub async fn save_screen_config(
+    profile_name: String,
+    screen_config: ScreenConfig,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let euroscope_config_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .ok_or_else(|| "unable to detect euroscope config folder".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_save_screen_config(&euroscope_config_dir, &profile_name, screen_config)
+    })
+    .await
+    .map_err(|error| format!("save screen config task failed: {}", error))?
+}
+
+fn run_save_screen_config(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+    mut screen_config: ScreenConfig,
+) -> Result<String, String> {
+    // Convert profile name to snake_case for file paths
+    let profile_name_snake = to_snake_case(profile_name);
+
+    // Step 1: Create custom-profiles directory structure
+    let appdata = env::var("APPDATA")
+        .map_err(|error| format!("unable to get APPDATA environment variable: {}", error))?;
+
+    let custom_profiles_dir = PathBuf::from(&appdata)
+        .join("controller-pack-manager")
+        .join("generated")
+        .join(&profile_name_snake);
+
+    fs::create_dir_all(&custom_profiles_dir)
+        .map_err(|error| format!("unable to create custom profiles directory: {}", error))?;
+
+    // Step 2: Create ScreenSettings.txt with serialized configuration
+    let screen_settings_txt_path = custom_profiles_dir.join("ScreenSettings.txt");
+
+    // Load existing ScreenSettings content to preserve untouched keys.
+    // Priority: currently referenced profile file -> generated fallback.
+    let profile_filename = if profile_name.ends_with(".prf") {
+        profile_name.to_string()
+    } else {
+        format!("{}.prf", profile_name)
+    };
+
+    let mut loaded_source_from_profile = false;
+    let profile_path = Path::new(euroscope_config_dir).join(&profile_filename);
+    if let Ok(profile_content) = fs::read_to_string(&profile_path) {
+        for line in profile_content.lines() {
+            let line_lower = line.to_ascii_lowercase();
+            if line.trim().starts_with("Settings")
+                && (line_lower.contains("screensettings")
+                    || line_lower.contains("settingsfilescreen"))
+            {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    let settings_path = parts[2..].join(" ");
+                    let resolved_path =
+                        resolve_settings_reference_path(euroscope_config_dir, &settings_path);
+                    if resolved_path.exists() {
+                        if let Ok(existing_content) = fs::read_to_string(&resolved_path) {
+                            screen_config.source = existing_content;
+                            loaded_source_from_profile = true;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    if !loaded_source_from_profile && screen_settings_txt_path.exists() {
+        if let Ok(existing_content) = fs::read_to_string(&screen_settings_txt_path) {
+            screen_config.source = existing_content;
+        }
+    }
+
+    let screen_settings_content = format!("{}", screen_config);
+
+    fs::write(&screen_settings_txt_path, screen_settings_content)
+        .map_err(|error| format!("unable to write ScreenSettings.txt: {}", error))?;
+
+    // Step 3: Copy to EuroScope directory
+    let euroscope_generated_dir = PathBuf::from(euroscope_config_dir)
+        .join("LIXX")
+        .join("Settings")
+        .join("generated")
+        .join(&profile_name_snake);
+
+    fs::create_dir_all(&euroscope_generated_dir)
+        .map_err(|error| format!("unable to create euroscope generated directory: {}", error))?;
+
+    let euroscope_screen_settings_txt_path = euroscope_generated_dir.join("ScreenSettings.txt");
+    fs::copy(
+        &screen_settings_txt_path,
+        &euroscope_screen_settings_txt_path,
+    )
+    .map_err(|error| {
+        format!(
+            "unable to copy ScreenSettings.txt to euroscope directory: {}",
+            error
+        )
+    })?;
+
+    // Step 4: Patch the profile file with ScreenSettings entry
+    let mut profile_path = PathBuf::from(euroscope_config_dir);
+
+    // Add .prf extension if not already present
+    let profile_filename = if profile_name.ends_with(".prf") {
+        profile_name.to_string()
+    } else {
+        format!("{}.prf", profile_name)
+    };
+
+    profile_path.push(&profile_filename);
+
+    // Build the settings path for the profile (relative EuroScope path with snake_case)
+    let settings_path = format!(
+        "\\LIXX\\Settings\\generated\\{}\\ScreenSettings.txt",
+        profile_name_snake
+    );
+
+    // Patch profile file to reference the screen settings
+    patch_profile_screen_settings_line(&profile_path, &settings_path)?;
+
+    Ok(format!(
+        "Screen settings saved successfully for profile '{}'",
+        profile_name
+    ))
+}
+
+#[tauri::command]
+pub async fn load_screen_config(
+    profile_name: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<ScreenConfig, String> {
+    let euroscope_config_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .ok_or_else(|| "unable to detect euroscope config folder".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_load_screen_config(&euroscope_config_dir, &profile_name)
+    })
+    .await
+    .map_err(|error| format!("load screen config task failed: {}", error))?
+}
+
+fn run_load_screen_config(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+) -> Result<ScreenConfig, String> {
+    // Convert profile name to snake_case to match saved format
+    let profile_name_snake = to_snake_case(profile_name);
+
+    // Build path to generated ScreenSettings.txt
+    let appdata = env::var("APPDATA")
+        .map_err(|error| format!("unable to get APPDATA environment variable: {}", error))?;
+
+    let screen_settings_txt_path = PathBuf::from(&appdata)
+        .join("controller-pack-manager")
+        .join("generated")
+        .join(&profile_name_snake)
+        .join("ScreenSettings.txt");
+
+    if screen_settings_txt_path.exists() {
+        let content = fs::read_to_string(&screen_settings_txt_path).map_err(|error| {
+            format!(
+                "unable to read ScreenSettings.txt for profile '{}': {}",
+                profile_name, error
+            )
+        })?;
+
+        return ScreenConfig::parse(&content).map_err(|error| {
+            format!(
+                "unable to parse ScreenSettings.txt for profile '{}': {}",
+                profile_name, error
+            )
+        });
+    }
+
+    // Try to load from profile settings reference
+    let profile_filename = if profile_name.ends_with(".prf") {
+        profile_name.to_string()
+    } else {
+        format!("{}.prf", profile_name)
+    };
+    let profile_path = Path::new(euroscope_config_dir).join(&profile_filename);
+    let profile_content = fs::read_to_string(&profile_path).map_err(|error| {
+        format!(
+            "unable to read profile file '{}': {}",
+            profile_path.display(),
+            error
+        )
+    })?;
+
+    // Look for screen settings reference in profile
+    for line in profile_content.lines() {
+        let line_lower = line.to_ascii_lowercase();
+        if line.trim().starts_with("Settings")
+            && (line_lower.contains("screensettings") || line_lower.contains("settingsfilescreen"))
+        {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 3 {
+                let settings_path = parts[2..].join(" ");
+                let resolved_path =
+                    resolve_settings_reference_path(euroscope_config_dir, &settings_path);
+                if resolved_path.exists() {
+                    let content = fs::read_to_string(&resolved_path).map_err(|error| {
+                        format!("unable to read screen settings file: {}", error)
+                    })?;
+                    return ScreenConfig::parse(&content)
+                        .map_err(|error| format!("unable to parse screen settings: {}", error));
+                }
+            }
+        }
+    }
+
+    // Return default if no saved config found
+    Ok(ScreenConfig::default())
+}
+
+#[tauri::command]
+pub async fn load_boolean_list_configs(
+    profile_name: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(Option<ControllerListConfig>, Option<TitleBarConfig>), String> {
+    let euroscope_config_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .ok_or_else(|| "unable to detect euroscope config folder".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_load_boolean_list_configs(&euroscope_config_dir, &profile_name)
+    })
+    .await
+    .map_err(|error| format!("load boolean list configs task failed: {}", error))?
+}
+
+fn run_load_boolean_list_configs(
+    euroscope_config_dir: &str,
+    profile_name: &str,
+) -> Result<(Option<ControllerListConfig>, Option<TitleBarConfig>), String> {
+    // Convert profile name to snake_case to match saved format
+    let profile_name_snake = to_snake_case(profile_name);
+
+    // Build path to generated ScreenSettings.txt
+    let appdata = env::var("APPDATA")
+        .map_err(|error| format!("unable to get APPDATA environment variable: {}", error))?;
+
+    let screen_settings_txt_path = PathBuf::from(&appdata)
+        .join("controller-pack-manager")
+        .join("generated")
+        .join(&profile_name_snake)
+        .join("ScreenSettings.txt");
+
+    let mut controller_list = None;
+    let mut title_bar = None;
+
+    if screen_settings_txt_path.exists() {
+        let content = fs::read_to_string(&screen_settings_txt_path).map_err(|error| {
+            format!(
+                "unable to read ScreenSettings.txt for profile '{}': {}",
+                profile_name, error
+            )
+        })?;
+
+        // Try to parse both configs
+        if let Ok(cfg) = ControllerListConfig::parse(&content) {
+            controller_list = Some(cfg);
+        }
+        if let Ok(cfg) = TitleBarConfig::parse(&content) {
+            title_bar = Some(cfg);
+        }
+    } else {
+        // Try to load from profile settings reference
+        let profile_filename = if profile_name.ends_with(".prf") {
+            profile_name.to_string()
+        } else {
+            format!("{}.prf", profile_name)
+        };
+        let profile_path = Path::new(euroscope_config_dir).join(&profile_filename);
+        if let Ok(profile_content) = fs::read_to_string(&profile_path) {
+            for line in profile_content.lines() {
+                let line_lower = line.to_ascii_lowercase();
+                if line.trim().starts_with("Settings")
+                    && (line_lower.contains("screensettings")
+                        || line_lower.contains("settingsfilescreen"))
+                {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 3 {
+                        let settings_path = parts[2..].join(" ");
+                        let resolved_path =
+                            resolve_settings_reference_path(euroscope_config_dir, &settings_path);
+                        if resolved_path.exists() {
+                            if let Ok(content) = fs::read_to_string(&resolved_path) {
+                                if let Ok(cfg) = ControllerListConfig::parse(&content) {
+                                    controller_list = Some(cfg);
+                                }
+                                if let Ok(cfg) = TitleBarConfig::parse(&content) {
+                                    title_bar = Some(cfg);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((controller_list, title_bar))
 }

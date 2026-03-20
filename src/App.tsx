@@ -1,10 +1,11 @@
-import { Profile, ListConfig } from "./main";
+import { Profile, ListConfig, ScreenConfig, ControllerListConfig, MetarListConfig } from "./main";
 import { Layout } from "./components/Layout";
 import { PluginSection } from "./components/PluginSection";
 import { AiracSection } from "./components/AiracSection";
 import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
 import { ListsSection } from "./components";
+import type { ListsSectionScreenConfig } from "./components/ListsSection";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -42,13 +43,29 @@ function App(
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [loadedConfigs, setLoadedConfigs] = useState<ListConfig[] | null>(null);
-    const listsSectionRef = useRef<{ getCurrentLayout: () => ListConfig[] | null }>(null);
+    const [loadedControllerList, setLoadedControllerList] = useState<ControllerListConfig | null>(null);
+    const [loadedMetarList, setLoadedMetarList] = useState<MetarListConfig | null>(null);
+    const listsSectionRef = useRef<{
+        getCurrentLayout: () => ListConfig[] | null;
+        getCurrentScreenConfig: () => ListsSectionScreenConfig;
+    }>(null);
 
     const refreshProfiles = async () => {
         try {
             const updatedProfiles = await invoke<Profile[] | null>("get_existing_profiles");
             if (updatedProfiles) {
-                setAppProfiles(updatedProfiles);
+                setAppProfiles((previousProfiles) => {
+                    const screenConfigByName = new Map(
+                        (previousProfiles ?? [])
+                            .filter((profile) => profile.screenConfig)
+                            .map((profile) => [profile.name, profile.screenConfig])
+                    );
+
+                    return updatedProfiles.map((profile) => ({
+                        ...profile,
+                        screenConfig: screenConfigByName.get(profile.name) ?? profile.screenConfig,
+                    }));
+                });
             }
         } catch (error) {
             console.error("Failed to refresh profiles:", error);
@@ -71,20 +88,76 @@ function App(
 
         try {
             const currentLayout = listsSectionRef.current.getCurrentLayout();
-            if (!currentLayout || currentLayout.length === 0) {
+            const currentScreenLists = listsSectionRef.current.getCurrentScreenConfig();
+            let savedSomething = false;
+
+            if (currentLayout && currentLayout.length > 0) {
+                await invoke<string>("save_layout", {
+                    profileName: selectedProfileName.replace(/\.prf$/i, ""),
+                    listConfigs: currentLayout,
+                });
+                savedSomething = true;
+            }
+
+            const selectedProfile = appProfiles?.find((profile) => profile.name === selectedProfileName) ?? null;
+            const currentScreenConfig = selectedProfile?.screenConfig ?? null;
+            const profileNameNoExt = selectedProfileName.replace(/\.prf$/i, "");
+
+            let latestScreenConfig: ScreenConfig | null = null;
+            try {
+                latestScreenConfig = await invoke<ScreenConfig>("load_screen_config", {
+                    profileName: profileNameNoExt,
+                });
+            } catch {
+                latestScreenConfig = currentScreenConfig;
+            }
+
+            const mergedScreenConfig: ScreenConfig = {
+                controller_list: currentScreenLists.controller_list,
+                metar_list: currentScreenLists.metar_list,
+                title_bar: latestScreenConfig?.title_bar ?? {
+                    visible: false,
+                    file_name: true,
+                    controller_name: true,
+                    primary_frequency: true,
+                    atis_frequency: true,
+                    clock: true,
+                    leader: true,
+                    filter: true,
+                    transition_level: true,
+                },
+                display_config: latestScreenConfig?.display_config ?? { id: 0, position: 0, maximized: false },
+                connect_sel_to_sil: latestScreenConfig?.connect_sel_to_sil ?? true,
+                connect_dep_to_sel: latestScreenConfig?.connect_dep_to_sel ?? true,
+                connect_sil_to_top: latestScreenConfig?.connect_sil_to_top ?? false,
+            };
+
+            await invoke<string>("save_screen_config", {
+                profileName: profileNameNoExt,
+                screenConfig: mergedScreenConfig,
+            });
+            savedSomething = true;
+
+            setAppProfiles((previousProfiles) => {
+                if (!previousProfiles) {
+                    return previousProfiles;
+                }
+                return previousProfiles.map((profile) =>
+                    profile.name === selectedProfileName
+                        ? { ...profile, screenConfig: mergedScreenConfig }
+                        : profile
+                );
+            });
+
+            if (!savedSomething) {
                 setSaveError("No lists to save");
                 setIsSaving(false);
                 return;
             }
 
-            const result = await invoke<string>("save_layout", {
-                profileName: selectedProfileName.replace(/\.prf$/i, ""),
-                listConfigs: currentLayout,
-            });
-
             setSaveSuccess(true);
             // Show the success message
-            console.log(result);
+            console.log("Layout and screen settings saved");
             setTimeout(() => setSaveSuccess(false), 3000);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -131,6 +204,57 @@ function App(
         return () => {
             cancelled = true;
         };
+    }, [selectedProfileName]);
+
+    useEffect(() => {
+        if (!selectedProfileName) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadScreenConfig = async () => {
+            try {
+                const config = await invoke<ScreenConfig>("load_screen_config", {
+                    profileName: selectedProfileName.replace(/\.prf$/i, ""),
+                });
+
+                if (!cancelled) {
+                    setLoadedControllerList(config.controller_list ?? null);
+                    setLoadedMetarList(config.metar_list ?? null);
+                    setAppProfiles((previousProfiles) => {
+                        if (!previousProfiles) {
+                            return previousProfiles;
+                        }
+
+                        return previousProfiles.map((profile) =>
+                            profile.name === selectedProfileName
+                                ? { ...profile, screenConfig: config }
+                                : profile
+                        );
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to load screen config:", error);
+                if (!cancelled) {
+                    setLoadedMetarList(null);
+                }
+                // Screen config loading failure is not critical
+            }
+        };
+
+        loadScreenConfig();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedProfileName]);
+
+    useEffect(() => {
+        if (!selectedProfileName) {
+            setLoadedControllerList(null);
+            setLoadedMetarList(null);
+        }
     }, [selectedProfileName]);
 
     useEffect(() => {
@@ -202,7 +326,14 @@ function App(
         }
 
         if (activeSection === "profiles") {
-            return <ProfilesList profiles={appProfiles} onProfilesUpdate={handleProfilesUpdate} />;
+            return (
+                <ProfilesList
+                    profiles={appProfiles}
+                    selectedProfileName={selectedProfileName}
+                    onSelectProfileName={setSelectedProfileName}
+                    onProfilesUpdate={handleProfilesUpdate}
+                />
+            );
         }
 
         if (activeSection === "lists") {
@@ -210,6 +341,8 @@ function App(
                 <ListsSection
                     listConfigs={listConfigs}
                     resumeLayout={loadedConfigs}
+                    controllerListConfig={loadedControllerList}
+                    metarListConfig={loadedMetarList}
                     ref={listsSectionRef}
                 />
             );
@@ -229,7 +362,7 @@ function App(
                     <div className="flex items-start justify-between gap-3">
                         <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
                         <div className="flex items-center gap-3">
-                            {activeSection === "lists" && appProfiles && appProfiles.length > 0 && (
+                            {(activeSection === "lists" || activeSection === "profiles") && appProfiles && appProfiles.length > 0 && (
                                 <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-3 text-sm text-secondary-100">
                                         <span className="text-secondary-500 font-semibold">Profile</span>
@@ -245,19 +378,23 @@ function App(
                                             ))}
                                         </select>
                                     </label>
-                                    <button
-                                        type="button"
-                                        className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                        onClick={handleSaveLayout}
-                                        disabled={isSaving}
-                                    >
-                                        {isSaving ? "Saving..." : saveSuccess ? "✓ Saved!" : "Save Layout to Profile"}
-                                    </button>
-                                    {saveError && (
-                                        <div className="rounded border border-accent-danger bg-accent-danger/10 px-3 py-2 text-sm font-medium text-accent-danger flex items-center gap-2">
-                                            <span>✕</span>
-                                            <span>{saveError}</span>
-                                        </div>
+                                    {activeSection === "lists" && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                onClick={handleSaveLayout}
+                                                disabled={isSaving}
+                                            >
+                                                {isSaving ? "Saving..." : saveSuccess ? "✓ Saved!" : "Save Layout to Profile"}
+                                            </button>
+                                            {saveError && (
+                                                <div className="rounded border border-accent-danger bg-accent-danger/10 px-3 py-2 text-sm font-medium text-accent-danger flex items-center gap-2">
+                                                    <span>✕</span>
+                                                    <span>{saveError}</span>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}

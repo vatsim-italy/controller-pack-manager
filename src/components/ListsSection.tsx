@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
-import { ListConfig } from "../main";
+import { ListConfig, ControllerListConfig, MetarListConfig } from "../main";
+
+export type ListsSectionScreenConfig = {
+    controller_list: ControllerListConfig;
+    metar_list: MetarListConfig;
+};
 
 interface ListsSectionProps {
     listConfigs: ListConfig[] | null;
     resumeLayout: ListConfig[] | null;
+    controllerListConfig: ControllerListConfig | null;
+    metarListConfig: MetarListConfig | null;
 }
 
 type RadarResolutionKey = "custom" | "1080p" | "2k" | "4k";
@@ -14,6 +21,7 @@ type RadarColumn = {
 
 type RadarListConfig = {
     id: string;
+    kind: "standard" | "controller-list";
     visible: boolean;
     x: number;
     y: number;
@@ -72,6 +80,16 @@ const placeholderValueForColumn = (columnId: string, widthChars: number) => {
     return `${columnId}${" ".repeat(widthChars - columnId.length)}`;
 };
 
+const getListDisplayName = (listId: string) => {
+    if (listId === "ControllerListConfig") {
+        return "Controller List";
+    }
+    if (listId === "MetarListConfig") {
+        return "Metar List";
+    }
+    return listId;
+};
+
 const measureCharacterWidth = (): number => {
     const testString = "abcdefghijklmnopqrstuvwxyz";
     const testEl = document.createElement("span");
@@ -92,9 +110,12 @@ const measureCharacterWidth = (): number => {
 };
 
 export const ListsSection = forwardRef<
-    { getCurrentLayout: () => ListConfig[] | null },
+    {
+        getCurrentLayout: () => ListConfig[] | null;
+        getCurrentScreenConfig: () => ListsSectionScreenConfig;
+    },
     ListsSectionProps
->(({ listConfigs, resumeLayout }, ref) => {
+>(({ listConfigs, resumeLayout, controllerListConfig, metarListConfig }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
     const charWidth = useMemo(() => measureCharacterWidth(), []);
 
@@ -154,7 +175,60 @@ export const ListsSection = forwardRef<
                 })
                 .filter((config): config is ListConfig => config !== null);
         },
-    }), [listConfigs, radarLists]);
+        getCurrentScreenConfig: () => {
+            const controllerList = radarLists.find((list) => list.id === "ControllerListConfig");
+            const metarList = radarLists.find((list) => list.id === "MetarListConfig");
+
+            const isVisible = (list: RadarListConfig | undefined, name: string, fallback: boolean) => {
+                const column = list?.columns.find((col) => (col.values[0] ?? "").toLowerCase() === name.toLowerCase());
+                if (!column) {
+                    return fallback;
+                }
+                return isColumnVisible(column.values);
+            };
+
+            const fallbackController = controllerListConfig ?? {
+                visible: false,
+                x: 0,
+                y: 0,
+                fss: true,
+                ctr: true,
+                app: true,
+                twr: true,
+                gnd: true,
+                atis: true,
+                obs: false,
+            };
+
+            const fallbackMetar = metarListConfig ?? {
+                visible: false,
+                x: 0,
+                y: 0,
+                title: true,
+            };
+
+            return {
+                controller_list: {
+                    visible: controllerList?.visible ?? fallbackController.visible,
+                    x: controllerList?.x ?? fallbackController.x,
+                    y: controllerList?.y ?? fallbackController.y,
+                    fss: isVisible(controllerList, "FSS", fallbackController.fss),
+                    ctr: isVisible(controllerList, "CTR", fallbackController.ctr),
+                    app: isVisible(controllerList, "APP", fallbackController.app),
+                    twr: isVisible(controllerList, "TWR", fallbackController.twr),
+                    gnd: isVisible(controllerList, "GND", fallbackController.gnd),
+                    atis: isVisible(controllerList, "ATIS", fallbackController.atis),
+                    obs: isVisible(controllerList, "OBS", fallbackController.obs),
+                },
+                metar_list: {
+                    visible: metarList?.visible ?? fallbackMetar.visible,
+                    x: metarList?.x ?? fallbackMetar.x,
+                    y: metarList?.y ?? fallbackMetar.y,
+                    title: isVisible(metarList, "Title", fallbackMetar.title),
+                },
+            };
+        },
+    }), [listConfigs, radarLists, controllerListConfig, metarListConfig]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -176,7 +250,10 @@ export const ListsSection = forwardRef<
     }, []);
 
     useEffect(() => {
-        if (!listConfigs || listConfigs.length === 0) {
+        const baseListConfigs = listConfigs ?? [];
+        const hasBooleanConfigs = true;
+
+        if (baseListConfigs.length === 0 && !hasBooleanConfigs) {
             setRadarLists([]);
             setSelectedListId(null);
             return;
@@ -184,11 +261,12 @@ export const ListsSection = forwardRef<
 
         const resumeById = new Map((resumeLayout ?? []).map((config) => [config.id, config]));
 
-        const normalized = listConfigs.map((config) => {
+        const normalized: RadarListConfig[] = baseListConfigs.map((config) => {
             const resumedConfig = resumeById.get(config.id);
 
             return {
                 id: config.id,
+                kind: "standard",
                 visible: resumedConfig?.visible ?? false,
                 x: resumedConfig?.x ?? config.x,
                 y: resumedConfig?.y ?? config.y,
@@ -200,9 +278,61 @@ export const ListsSection = forwardRef<
             };
         });
 
+        const effectiveControllerList = controllerListConfig ?? {
+            visible: false,
+            x: 0,
+            y: 0,
+            fss: true,
+            ctr: true,
+            app: true,
+            twr: true,
+            gnd: true,
+            atis: true,
+            obs: false,
+        };
+
+        normalized.push({
+            id: "ControllerListConfig",
+            kind: "controller-list",
+            visible: effectiveControllerList.visible,
+            x: effectiveControllerList.x,
+            y: effectiveControllerList.y,
+            line_number: 0,
+            ordered_by_index: 1,
+            columns: [
+                { values: ["FSS", "4", effectiveControllerList.fss ? "1" : "0"] },
+                { values: ["CTR", "4", effectiveControllerList.ctr ? "1" : "0"] },
+                { values: ["APP", "4", effectiveControllerList.app ? "1" : "0"] },
+                { values: ["TWR", "4", effectiveControllerList.twr ? "1" : "0"] },
+                { values: ["GND", "4", effectiveControllerList.gnd ? "1" : "0"] },
+                { values: ["ATIS", "5", effectiveControllerList.atis ? "1" : "0"] },
+                { values: ["OBS", "4", effectiveControllerList.obs ? "1" : "0"] },
+            ],
+        });
+
+        const effectiveMetarList = metarListConfig ?? {
+            visible: false,
+            x: 0,
+            y: 0,
+            title: true,
+        };
+
+        normalized.push({
+            id: "MetarListConfig",
+            kind: "standard",
+            visible: effectiveMetarList.visible,
+            x: effectiveMetarList.x,
+            y: effectiveMetarList.y,
+            line_number: 0,
+            ordered_by_index: 1,
+            columns: [
+                { values: ["Title", "8", effectiveMetarList.title ? "1" : "0"] },
+            ],
+        });
+
         setRadarLists(normalized);
         setSelectedListId(null);
-    }, [listConfigs, resumeLayout]);
+    }, [listConfigs, resumeLayout, controllerListConfig, metarListConfig]);
 
     useEffect(() => {
         if (dropdownState !== "add-list") {
@@ -226,9 +356,9 @@ export const ListsSection = forwardRef<
 
     const availableListsForAdd = useMemo(
         () => radarLists
-            .filter((list) => !list.visible)
-            .filter((list) => list.id.toLowerCase().includes(addListSearchQuery.toLowerCase()))
-            .filter((list, index, self) => self.findIndex(l => l.id === list.id) === index),
+            .filter((list) => getListDisplayName(list.id).toLowerCase().includes(addListSearchQuery.toLowerCase()))
+            .filter((list, index, self) => self.findIndex(l => l.id === list.id) === index)
+            .sort((a, b) => Number(a.visible) - Number(b.visible)),
         [radarLists, addListSearchQuery]
     );
 
@@ -236,6 +366,9 @@ export const ListsSection = forwardRef<
         () => radarLists.find((listConfig) => listConfig.id === selectedListId) ?? null,
         [radarLists, selectedListId]
     );
+
+    const isSpecialBooleanList =
+        selectedList?.id === "ControllerListConfig" || selectedList?.id === "MetarListConfig";
 
     // Drag handling
     useEffect(() => {
@@ -357,12 +490,23 @@ export const ListsSection = forwardRef<
                 // Spawn at canvas center
                 const nextX = Math.round(activeResolution.width / 2 - 150);
                 const nextY = Math.round(activeResolution.height / 2 - 40);
+                const nextColumns =
+                    listId === "ControllerListConfig"
+                        ? listConfig.columns.map((column) => {
+                            const isObs = (column.values[0] ?? "").toUpperCase() === "OBS";
+                            return {
+                                ...column,
+                                values: setColumnVisibility(column.values, !isObs),
+                            };
+                        })
+                        : listConfig.columns;
 
                 return {
                     ...listConfig,
                     visible: true,
                     x: clamp(nextX, 0, activeResolution.width - 100),
                     y: clamp(nextY, 0, activeResolution.height - 100),
+                    columns: nextColumns,
                 };
             })
         );
@@ -462,7 +606,7 @@ export const ListsSection = forwardRef<
         await rootRef.current.requestFullscreen();
     };
 
-    if (!listConfigs || listConfigs.length === 0) {
+    if (radarLists.length === 0) {
         return (
             <div className="rounded-xl border border-secondary-600 bg-dark-header p-6 shadow-md">
                 <h2 className="text-xl font-semibold text-white">List Configs</h2>
@@ -494,10 +638,13 @@ export const ListsSection = forwardRef<
             >
                 <div style={{ width: `${activeResolution.width}px`, height: `${activeResolution.height}px` }} className="relative">
                     {visibleRadarLists.map((listConfig) => {
+                        const isFixedWidthBooleanList =
+                            listConfig.id === "ControllerListConfig" || listConfig.id === "MetarListConfig";
                         const visibleColumns = listConfig.columns.filter((column) => isColumnVisible(column.values));
                         const totalWidth = visibleColumns.reduce((sum, column) => sum + columnWidthChars(column.values), 0);
                         const gapsWidth = Math.max(0, visibleColumns.length - 1) * (charWidth * 0.5);
                         const totalWidthPx = totalWidth * charWidth + gapsWidth;
+                        const listWidthPx = isFixedWidthBooleanList ? 240 : totalWidthPx;
 
                         return (
                             <div
@@ -507,7 +654,7 @@ export const ListsSection = forwardRef<
                                 style={{
                                     left: `${listConfig.x}px`,
                                     top: `${listConfig.y}px`,
-                                    width: `${totalWidthPx}px`,
+                                    width: `${listWidthPx}px`,
                                 }}
                                 onPointerDown={(event) => handlePointerDown(event, listConfig)}
                             >
@@ -517,7 +664,7 @@ export const ListsSection = forwardRef<
                                         className="flex-1 cursor-pointer px-2 py-2 text-left text-sm font-bold uppercase tracking-wide text-secondary-100 hover:bg-secondary-600"
                                         onClick={(event) => handleTitleClick(event, listConfig.id)}
                                     >
-                                        {listConfig.id}
+                                        {getListDisplayName(listConfig.id)}
                                     </button>
                                     <button
                                         type="button"
@@ -529,48 +676,54 @@ export const ListsSection = forwardRef<
                                     </button>
                                 </div>
 
-                                <table className="w-full border-collapse leading-tight" style={{ borderCollapse: "separate", borderSpacing: `${charWidth * 0.5}px 0px`, fontSize: "inherit" }}>
-                                    <thead>
-                                        <tr>
-                                            {visibleColumns.map((column) => {
-                                                const widthChars = columnWidthChars(column.values);
-                                                const widthPx = widthChars * charWidth;
-                                                return (
-                                                    <th
-                                                        key={`${listConfig.id}-header-${column.values.join("|")}`}
-                                                        className="border-b border-secondary-600 text-center font-semibold text-secondary-100"
-                                                        style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
-                                                    >
-                                                        {columnIdFromValues(column.values)}
-                                                    </th>
-                                                );
-                                            })}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            {visibleColumns.map((column) => {
-                                                const columnId = columnIdFromValues(column.values);
-                                                const widthChars = columnWidthChars(column.values);
-                                                const widthPx = widthChars * charWidth;
-                                                return (
-                                                    <td
-                                                        key={`${listConfig.id}-row-0-${column.values.join("|")}`}
-                                                        className="text-secondary-100"
-                                                        style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
-                                                    >
-                                                        {placeholderValueForColumn(columnId, widthChars)}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                        {visibleColumns.length === 0 && (
+                                {isFixedWidthBooleanList ? (
+                                    <div className="px-2 py-2 text-xs text-secondary-300">
+                                        Click title to configure options
+                                    </div>
+                                ) : (
+                                    <table className="w-full border-collapse leading-tight" style={{ borderCollapse: "separate", borderSpacing: `${charWidth * 0.5}px 0px`, fontSize: "inherit" }}>
+                                        <thead>
                                             <tr>
-                                                <td className="px-2 py-1 text-xs text-secondary-500">No visible columns</td>
+                                                {visibleColumns.map((column) => {
+                                                    const widthChars = columnWidthChars(column.values);
+                                                    const widthPx = widthChars * charWidth;
+                                                    return (
+                                                        <th
+                                                            key={`${listConfig.id}-header-${column.values.join("|")}`}
+                                                            className="border-b border-secondary-600 text-center font-semibold text-secondary-100"
+                                                            style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
+                                                        >
+                                                            {columnIdFromValues(column.values)}
+                                                        </th>
+                                                    );
+                                                })}
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                {visibleColumns.map((column) => {
+                                                    const columnId = columnIdFromValues(column.values);
+                                                    const widthChars = columnWidthChars(column.values);
+                                                    const widthPx = widthChars * charWidth;
+                                                    return (
+                                                        <td
+                                                            key={`${listConfig.id}-row-0-${column.values.join("|")}`}
+                                                            className="text-secondary-100"
+                                                            style={{ width: `${widthPx}px`, padding: 0, margin: 0 }}
+                                                        >
+                                                            {placeholderValueForColumn(columnId, widthChars)}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            {visibleColumns.length === 0 && (
+                                                <tr>
+                                                    <td className="px-2 py-1 text-xs text-secondary-500">No visible columns</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                )}
                             </div>
                         );
                     })}
@@ -719,7 +872,7 @@ export const ListsSection = forwardRef<
                                     className="w-full border-b border-secondary-600 px-3 py-2 text-left text-sm text-secondary-100 hover:bg-secondary-600"
                                     onClick={() => addList(listConfig.id)}
                                 >
-                                    {listConfig.id}
+                                    {getListDisplayName(listConfig.id)}
                                 </button>
                             ))}
                         {availableListsForAdd.length === 0 &&
@@ -768,7 +921,7 @@ export const ListsSection = forwardRef<
                         }}
                     >
                         <div>
-                            <h3 className="text-sm font-semibold text-white">{selectedList.id}</h3>
+                            <h3 className="text-sm font-semibold text-white">{getListDisplayName(selectedList.id)}</h3>
                             <p className="mt-1 text-xs text-secondary-500">Position & Columns</p>
                         </div>
                         <button
@@ -782,7 +935,7 @@ export const ListsSection = forwardRef<
 
                     <div className="px-4 py-3 space-y-3">
                         {/* Position Controls + Max rows */}
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className={`grid gap-2 ${isSpecialBooleanList ? "grid-cols-2" : "grid-cols-3"}`}>
                             <label className="text-xs text-secondary-500">
                                 X
                                 <input
@@ -811,58 +964,62 @@ export const ListsSection = forwardRef<
                                 />
                             </label>
 
-                            <label className="text-xs text-secondary-500">
-                                Max rows
-                                <input
-                                    type="number"
-                                    className="mt-1 w-full rounded border border-secondary-500 bg-secondary-700 px-2 py-1 text-sm text-secondary-100"
-                                    value={selectedList.line_number}
-                                    min={0}
-                                    max={65535}
-                                    onChange={(event) => {
-                                        const nextValue = clamp(
-                                            Number.parseInt(event.target.value || "0", 10),
-                                            0,
-                                            65535
-                                        );
-                                        setRadarLists((previousLists) =>
-                                            previousLists.map((listConfig) =>
-                                                listConfig.id === selectedList.id
-                                                    ? { ...listConfig, line_number: nextValue }
-                                                    : listConfig
-                                            )
-                                        );
-                                    }}
-                                />
-                            </label>
+                            {!isSpecialBooleanList && (
+                                <label className="text-xs text-secondary-500">
+                                    Max rows
+                                    <input
+                                        type="number"
+                                        className="mt-1 w-full rounded border border-secondary-500 bg-secondary-700 px-2 py-1 text-sm text-secondary-100"
+                                        value={selectedList.line_number}
+                                        min={0}
+                                        max={65535}
+                                        onChange={(event) => {
+                                            const nextValue = clamp(
+                                                Number.parseInt(event.target.value || "0", 10),
+                                                0,
+                                                65535
+                                            );
+                                            setRadarLists((previousLists) =>
+                                                previousLists.map((listConfig) =>
+                                                    listConfig.id === selectedList.id
+                                                        ? { ...listConfig, line_number: nextValue }
+                                                        : listConfig
+                                                )
+                                            );
+                                        }}
+                                    />
+                                </label>
+                            )}
                         </div>
 
                         {/* Order By Column Select */}
-                        <div>
-                            <label className="text-xs text-secondary-500">
-                                Order By
-                                <select
-                                    className="mt-1 w-full rounded border border-secondary-500 bg-secondary-700 px-2 py-1 text-sm text-secondary-100"
-                                    value={selectedList.ordered_by_index}
-                                    onChange={(event) => {
-                                        const nextIndex = Number.parseInt(event.target.value || "1", 10);
-                                        setRadarLists((previousLists) =>
-                                            previousLists.map((listConfig) =>
-                                                listConfig.id === selectedList.id
-                                                    ? { ...listConfig, ordered_by_index: nextIndex }
-                                                    : listConfig
-                                            )
-                                        );
-                                    }}
-                                >
-                                    {selectedList.columns.map((column, index) => (
-                                        <option key={index} value={index + 1}>
-                                            {columnIdFromValues(column.values)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        </div>
+                        {!isSpecialBooleanList && (
+                            <div>
+                                <label className="text-xs text-secondary-500">
+                                    Order By
+                                    <select
+                                        className="mt-1 w-full rounded border border-secondary-500 bg-secondary-700 px-2 py-1 text-sm text-secondary-100"
+                                        value={selectedList.ordered_by_index}
+                                        onChange={(event) => {
+                                            const nextIndex = Number.parseInt(event.target.value || "1", 10);
+                                            setRadarLists((previousLists) =>
+                                                previousLists.map((listConfig) =>
+                                                    listConfig.id === selectedList.id
+                                                        ? { ...listConfig, ordered_by_index: nextIndex }
+                                                        : listConfig
+                                                )
+                                            );
+                                        }}
+                                    >
+                                        {selectedList.columns.map((column, index) => (
+                                            <option key={index} value={index + 1}>
+                                                {columnIdFromValues(column.values)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
+                        )}
 
                         <div className="border-t border-secondary-600 pt-3">
                             <p className="text-xs font-semibold text-white mb-2">Columns</p>

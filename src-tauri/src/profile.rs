@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::app::AppState;
+use crate::settings::ScreenConfig;
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,6 +16,7 @@ pub struct Profile {
     pub connect_to_vatsim: Option<bool>,
     pub proxy_server: Option<String>,
     pub configured_lists: Vec<(String, String)>,
+    pub screen_config: Option<ScreenConfig>,
 }
 
 impl Profile {
@@ -27,16 +29,19 @@ impl Profile {
         for line in content.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
 
-            if parts.len() < 2 || parts[0] != "LastSession" {
+            if parts.len() < 2 {
                 continue;
             }
 
-            if parts.len() >= 2 {
-                if parts[0] == "LastSession" {
-                    Self::parse_last_session_info(&mut profile, &parts);
-                } else if parts[0] == "Settings" {
-                    Self::parse_settings_info(&mut profile, &parts)
-                        .expect(format!("failed to parse profile {}", file_name).as_str());
+            if parts[0] == "LastSession" {
+                Self::parse_last_session_info(&mut profile, &parts);
+            } else if parts[0] == "Settings" {
+                if let Err(error) = Self::parse_settings_info(&mut profile, &parts) {
+                    dbg!(
+                        "warning: failed to parse Settings line in profile '{}': {}",
+                        file_name,
+                        error
+                    );
                 }
             }
         }
@@ -61,9 +66,13 @@ impl Profile {
     }
 
     pub fn parse_settings_info(profile: &mut Profile, parts: &Vec<&str>) -> Result<(), String> {
+        if parts.len() < 3 {
+            return Ok(());
+        }
+
         let list_id = parts[1]
             .strip_prefix("Settingsfile")
-            .ok_or("failed to parse Setting statemnt in profile".to_string())?;
+            .ok_or("failed to parse Settings statement in profile".to_string())?;
 
         let config_file_path = parts[2..].join(" ");
 
@@ -195,6 +204,46 @@ pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result
     })
 }
 
+pub fn patch_profile_screen_settings_line(
+    profile_file_path: &Path,
+    settings_path: &str,
+) -> Result<(), String> {
+    let content = fs::read_to_string(profile_file_path).map_err(|error| {
+        format!(
+            "unable to read profile '{}': {}",
+            profile_file_path.display(),
+            error
+        )
+    })?;
+
+    // Filter out existing ScreenSettings lines
+    let mut kept_lines: Vec<String> = content
+        .lines()
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            !(lower.contains("settingsfilescreen") || lower.contains("screensettings"))
+        })
+        .map(|line| line.to_string())
+        .collect();
+
+    // Add new Settings line for screen settings
+    kept_lines.push(format!("Settings\tSettingsfileScreen\t{}", settings_path));
+
+    let mut patched = kept_lines.join("\n");
+
+    if !patched.is_empty() {
+        patched.push('\n');
+    }
+
+    fs::write(profile_file_path, patched).map_err(|error| {
+        format!(
+            "unable to write patched profile '{}': {}",
+            profile_file_path.display(),
+            error
+        )
+    })
+}
+
 pub fn update_profile_and_reload(
     euroscope_config_dir: &str,
     original_name: String,
@@ -215,6 +264,7 @@ pub fn update_profile_and_reload(
         connect_to_vatsim,
         proxy_server,
         configured_lists,
+        screen_config: None,
     };
 
     // Build the path to the original profile file

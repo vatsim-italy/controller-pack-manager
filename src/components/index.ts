@@ -8,3 +8,5 @@ export { ProfilesList } from "./ProfilesList";
 export { HoppieSection } from "./HoppieSection";
 export { ListsSection } from "./ListsSection";
 export { ListConfigCard } from "./ListConfigCard";
+export { ScreenConfigSection } from "./ScreenConfigSection";
+export { BooleanListCard } from "./BooleanListCard";

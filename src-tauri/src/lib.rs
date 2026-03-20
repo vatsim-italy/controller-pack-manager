@@ -44,6 +44,9 @@ pub fn run() {
             get_list_configs,
             save_layout,
             load_layout,
+            save_screen_config,
+            load_screen_config,
+            load_boolean_list_configs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
