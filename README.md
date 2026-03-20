@@ -31,6 +31,16 @@ Sector files (`.sct` / `.ese`) are **not** downloaded automatically by the app, 
 
 - Detects existing EuroScope profile files.
 - Lets you update/clone/delete profiles while preserving key user data during updates.
+- Includes dedicated profile subsections for:
+	- **Screen Configuration** (display ID, position, maximized, title bar fields),
+	- **ASR Configuration** (startup ASR selection),
+	- **Advanced Settings** (server/proxy/autoconnect).
+- Supports selecting a startup ASR file via file dialog and writes it to profile..
+
+### Lists / Radar Layout
+
+- Dedicated Lists section to compose and position radar lists on a canvas.
+- Supports saving and resuming per-profile layout state.
 
 ### TopSky / Hoppie
 
