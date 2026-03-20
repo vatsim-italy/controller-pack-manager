@@ -127,9 +127,9 @@ function App(
                     transition_level: true,
                 },
                 display_config: latestScreenConfig?.display_config ?? { id: 0, position: 0, maximized: false },
-                connect_sel_to_sil: latestScreenConfig?.connect_sel_to_sil ?? true,
-                connect_dep_to_sel: latestScreenConfig?.connect_dep_to_sel ?? true,
-                connect_sil_to_top: latestScreenConfig?.connect_sil_to_top ?? false,
+                connect_sel_to_sil: currentScreenLists.connect_sel_to_sil,
+                connect_dep_to_sel: currentScreenLists.connect_dep_to_sel,
+                connect_sil_to_top: currentScreenLists.connect_sil_to_top,
             };
 
             await invoke<string>("save_screen_config", {
@@ -351,6 +351,9 @@ function App(
                     resumeLayout={loadedConfigs}
                     controllerListConfig={loadedControllerList}
                     metarListConfig={loadedMetarList}
+                    connectSelToSil={selectedProfile?.screenConfig?.connect_sel_to_sil ?? true}
+                    connectDepToSel={selectedProfile?.screenConfig?.connect_dep_to_sel ?? true}
+                    connectSilToTop={selectedProfile?.screenConfig?.connect_sil_to_top ?? false}
                     displayPosition={selectedProfile?.screenConfig?.display_config?.position ?? 0}
                     ref={listsSectionRef}
                 />

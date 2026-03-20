@@ -4,6 +4,9 @@ import { ListConfig, ControllerListConfig, MetarListConfig } from "../main";
 export type ListsSectionScreenConfig = {
     controller_list: ControllerListConfig;
     metar_list: MetarListConfig;
+    connect_sel_to_sil: boolean;
+    connect_dep_to_sel: boolean;
+    connect_sil_to_top: boolean;
 };
 
 interface ListsSectionProps {
@@ -11,6 +14,9 @@ interface ListsSectionProps {
     resumeLayout: ListConfig[] | null;
     controllerListConfig: ControllerListConfig | null;
     metarListConfig: MetarListConfig | null;
+    connectSelToSil: boolean;
+    connectDepToSel: boolean;
+    connectSilToTop: boolean;
     displayPosition: number;
 }
 
@@ -137,7 +143,7 @@ export const ListsSection = forwardRef<
         getCurrentScreenConfig: () => ListsSectionScreenConfig;
     },
     ListsSectionProps
->(({ listConfigs, resumeLayout, controllerListConfig, metarListConfig, displayPosition }, ref) => {
+>(({ listConfigs, resumeLayout, controllerListConfig, metarListConfig, connectSelToSil, connectDepToSel, connectSilToTop, displayPosition }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
     const charWidth = useMemo(() => measureCharacterWidth(), []);
 
@@ -156,6 +162,9 @@ export const ListsSection = forwardRef<
     const [dropdownDragState, setDropdownDragState] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
     const [listMenuDragOffset, setListMenuDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [addListSearchQuery, setAddListSearchQuery] = useState<string>("");
+    const [connectSelToSilState, setConnectSelToSilState] = useState<boolean>(connectSelToSil);
+    const [connectDepToSelState, setConnectDepToSelState] = useState<boolean>(connectDepToSel);
+    const [connectSilToTopState, setConnectSilToTopState] = useState<boolean>(connectSilToTop);
 
     const canvasRef = useRef<HTMLDivElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -248,9 +257,20 @@ export const ListsSection = forwardRef<
                     y: metarList?.y ?? fallbackMetar.y,
                     title: isVisible(metarList, "Title", fallbackMetar.title),
                 },
+                connect_sel_to_sil: connectSelToSilState,
+                connect_dep_to_sel: connectDepToSelState,
+                connect_sil_to_top: connectSilToTopState,
             };
         },
-    }), [listConfigs, radarLists, controllerListConfig, metarListConfig]);
+    }), [
+        listConfigs,
+        radarLists,
+        controllerListConfig,
+        metarListConfig,
+        connectSelToSilState,
+        connectDepToSelState,
+        connectSilToTopState,
+    ]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -398,6 +418,47 @@ export const ListsSection = forwardRef<
 
     const isSpecialBooleanList =
         selectedList?.id === "ControllerListConfig" || selectedList?.id === "MetarListConfig";
+
+    useEffect(() => {
+        setConnectSelToSilState(connectSelToSil);
+        setConnectDepToSelState(connectDepToSel);
+        setConnectSilToTopState(connectSilToTop);
+    }, [connectSelToSil, connectDepToSel, connectSilToTop]);
+
+    const selectedListConnectionToggle = useMemo(() => {
+        if (!selectedList) {
+            return null;
+        }
+
+        const normalizedId = selectedList.id.trim().toUpperCase();
+        const normalizedLabel = getListDisplayName(selectedList.id).trim().toUpperCase();
+
+        if (normalizedId === "SEL" || normalizedLabel === "SEL") {
+            return {
+                label: "Connect SEL to SIL",
+                checked: connectSelToSilState,
+                onChange: setConnectSelToSilState,
+            };
+        }
+
+        if (normalizedId === "DEP" || normalizedLabel === "DEP") {
+            return {
+                label: "Connect DEP to SEL",
+                checked: connectDepToSelState,
+                onChange: setConnectDepToSelState,
+            };
+        }
+
+        if (normalizedId === "SIL" || normalizedLabel === "SIL") {
+            return {
+                label: "Connect SIL to TOP",
+                checked: connectSilToTopState,
+                onChange: setConnectSilToTopState,
+            };
+        }
+
+        return null;
+    }, [selectedList, connectSelToSilState, connectDepToSelState, connectSilToTopState]);
 
     // Drag handling
     useEffect(() => {
@@ -1075,6 +1136,20 @@ export const ListsSection = forwardRef<
                                 })}
                             </div>
                         </div>
+
+                        {selectedListConnectionToggle && (
+                            <div className="border-t border-secondary-600 pt-3">
+                                <p className="text-xs font-semibold text-white mb-2">Connections</p>
+                                <label className="flex items-center justify-between gap-2 rounded border border-secondary-600 px-2 py-1 text-xs cursor-pointer hover:bg-secondary-600">
+                                    <span className="text-secondary-100">{selectedListConnectionToggle.label}</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedListConnectionToggle.checked}
+                                        onChange={(event) => selectedListConnectionToggle.onChange(event.target.checked)}
+                                    />
+                                </label>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
