@@ -3,6 +3,7 @@ import { Profile, ScreenConfig } from "../main";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ScreenConfigSection } from "./ScreenConfigSection";
+import { ToggleSwitch } from "./ToggleSwitch";
 
 interface ProfilesListProps {
     profiles: Profile[] | null;
@@ -417,24 +418,27 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                         </button>
 
                         {isAsrConfigOpen && (
-                            <div className="space-y-2 border-t border-secondary-600 bg-dark-header/40 px-4 py-4">
-                                <div className="flex flex-wrap items-center gap-2 text-sm text-secondary-100">
-                                    <span className="font-semibold text-secondary-300">Startup ASR:</span>
-                                    <span className="break-all text-secondary-400">{startupAsr || "None"}</span>
-                                    <button
-                                        type="button"
-                                        onClick={selectStartupAsr}
-                                        className="rounded-lg border border-secondary-500 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-100 hover:border-secondary-400 transition-colors"
-                                    >
-                                        {startupAsr ? "Change" : "Add"}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStartupAsr("")}
-                                        className="rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-300 hover:border-secondary-500 transition-colors"
-                                    >
-                                        Clear
-                                    </button>
+                            <div className="space-y-3 border-t border-secondary-600 bg-dark-header/40 px-4 py-4">
+                                <p className="text-xs text-secondary-500">Select the radar view file loaded automatically at startup.</p>
+                                <div className="rounded-lg border border-secondary-600 bg-secondary-700/40 px-3 py-3">
+                                    <div className="flex flex-wrap items-center gap-2 text-sm text-secondary-100">
+                                        <span className="font-semibold text-secondary-300">Startup ASR:</span>
+                                        <span className="break-all text-secondary-300">{startupAsr || "None"}</span>
+                                        <button
+                                            type="button"
+                                            onClick={selectStartupAsr}
+                                            className="rounded-lg border border-secondary-500 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-100 hover:border-secondary-400 transition-colors"
+                                        >
+                                            {startupAsr ? "Change" : "Add"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStartupAsr("")}
+                                            className="rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-300 hover:border-secondary-500 transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -477,17 +481,11 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                                     </label>
                                 </div>
 
-                                <div className="rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2">
-                                    <label className="flex items-center gap-2 text-sm text-secondary-100">
-                                        <input
-                                            type="checkbox"
-                                            checked={connectToVatsim}
-                                            onChange={(event) => setConnectToVatsim(event.target.checked)}
-                                            className="h-4 w-4 rounded border-secondary-500 bg-secondary-700 text-primary-600 focus:ring-primary-600"
-                                        />
-                                        Automatically connect to VATSIM on EuroScope startup
-                                    </label>
-                                </div>
+                                <ToggleSwitch
+                                    label="Automatically connect to VATSIM on EuroScope startup"
+                                    checked={connectToVatsim}
+                                    onChange={setConnectToVatsim}
+                                />
                             </div>
                         )}
                     </div>
@@ -502,7 +500,16 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                         Delete Profile
                     </button>
                     <button type="button" className="btn-secondary btn-small" onClick={cloneSelectedProfile}>Clone Profile</button>
-                    <button type="button" className="btn-primary btn-small" onClick={saveCurrentProfile}>Save Profile</button>
+                    <button
+                        type="button"
+                        className={`btn-small ${saveSuccess
+                            ? "rounded-xl border border-green-600 bg-green-600 px-4 py-2 font-semibold text-white"
+                            : "btn-primary"
+                            }`}
+                        onClick={saveCurrentProfile}
+                    >
+                        {saveSuccess ? "✓ Saved" : "Save Profile"}
+                    </button>
                 </div>
             </section>
 

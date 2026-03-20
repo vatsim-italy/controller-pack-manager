@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { ListConfig, ControllerListConfig, MetarListConfig } from "../main";
+import { ToggleSwitch } from "./ToggleSwitch";
 
 export type ListsSectionScreenConfig = {
     controller_list: ControllerListConfig;
@@ -1140,14 +1141,12 @@ export const ListsSection = forwardRef<
                         {selectedListConnectionToggle && (
                             <div className="border-t border-secondary-600 pt-3">
                                 <p className="text-xs font-semibold text-white mb-2">Connections</p>
-                                <label className="flex items-center justify-between gap-2 rounded border border-secondary-600 px-2 py-1 text-xs cursor-pointer hover:bg-secondary-600">
-                                    <span className="text-secondary-100">{selectedListConnectionToggle.label}</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedListConnectionToggle.checked}
-                                        onChange={(event) => selectedListConnectionToggle.onChange(event.target.checked)}
-                                    />
-                                </label>
+                                <ToggleSwitch
+                                    compact
+                                    label={selectedListConnectionToggle.label}
+                                    checked={selectedListConnectionToggle.checked}
+                                    onChange={selectedListConnectionToggle.onChange}
+                                />
                             </div>
                         )}
                     </div>
