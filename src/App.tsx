@@ -63,7 +63,7 @@ function App(
 
                     return updatedProfiles.map((profile) => ({
                         ...profile,
-                        screenConfig: screenConfigByName.get(profile.name) ?? profile.screenConfig,
+                        screenConfig: profile.screenConfig ?? screenConfigByName.get(profile.name) ?? null,
                     }));
                 });
             }
@@ -72,8 +72,13 @@ function App(
         }
     };
 
-    const handleProfilesUpdate = () => {
-        refreshProfiles();
+    const handleProfilesUpdate = async (updatedProfiles?: Profile[] | null) => {
+        if (updatedProfiles) {
+            setAppProfiles(updatedProfiles);
+            return;
+        }
+
+        await refreshProfiles();
     };
 
     const handleSaveLayout = async () => {

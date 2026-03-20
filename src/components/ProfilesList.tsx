@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Profile, ScreenConfig } from "../main";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -10,46 +10,58 @@ interface ProfilesListProps {
     euroscopeConfigPath?: string | null;
     selectedProfileName?: string | null;
     onSelectProfileName?: (name: string) => void;
-    onProfilesUpdate?: () => void;
+    onProfilesUpdate?: (updatedProfiles?: Profile[] | null) => Promise<void> | void;
 }
 
 const withFallback = (value: string | null, fallback = "") => value ?? fallback;
 const stripPrf = (value: string) => value.replace(/\.prf$/i, "");
-
 export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileName, onSelectProfileName, onProfilesUpdate }: ProfilesListProps) => {
-    if (!profiles || profiles.length === 0) {
-        return (
-            <div className="card card-accent">
-                <div className="card-header">
-                    <div className="card-icon">👤</div>
-                    <h2 className="text-xl font-semibold text-white">Profiles</h2>
-                </div>
-                <div className="py-12 text-center">
-                    <div className="mb-4 text-4xl opacity-50">📋</div>
-                    <div className="mb-2 text-xl font-semibold text-secondary-100">No Profiles Found</div>
-                    <div className="text-base text-secondary-500">
-                        No EuroScope profiles are currently configured.
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    const safeProfiles = profiles ?? [];
 
-    const [localProfiles, setLocalProfiles] = useState<Profile[]>(profiles);
+    const [localProfiles, setLocalProfiles] = useState<Profile[]>(safeProfiles);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [isScreenConfigOpen, setIsScreenConfigOpen] = useState(true);
     const [isAsrConfigOpen, setIsAsrConfigOpen] = useState(true);
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [unsavedProfileNames, setUnsavedProfileNames] = useState<Set<string>>(new Set());
+    const [pendingCloneSourceByName, setPendingCloneSourceByName] = useState<Record<string, string>>({});
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; profileName: string }>({
         isOpen: false,
         profileName: "",
     });
 
+    const selectedIndexRef = useRef(selectedIndex);
+    const isSavingProfileRef = useRef(isSavingProfile);
+    const saveSuccessRef = useRef(saveSuccess);
+
     useEffect(() => {
-        setLocalProfiles(profiles);
+        selectedIndexRef.current = selectedIndex;
+    }, [selectedIndex]);
+
+    useEffect(() => {
+        isSavingProfileRef.current = isSavingProfile;
+    }, [isSavingProfile]);
+
+    useEffect(() => {
+        saveSuccessRef.current = saveSuccess;
+    }, [saveSuccess]);
+
+    useEffect(() => {
+        setLocalProfiles((previousProfiles) => {
+            const selectedLocalProfile = previousProfiles[selectedIndexRef.current] ?? null;
+
+            if (!selectedLocalProfile || (!isSavingProfileRef.current && !saveSuccessRef.current)) {
+                return safeProfiles;
+            }
+
+            return safeProfiles.map((profile) =>
+                profile.name === selectedLocalProfile.name ? selectedLocalProfile : profile
+            );
+        });
         if (selectedProfileName) {
-            const matchingIndex = profiles.findIndex((profile) => profile.name === selectedProfileName);
+            const matchingIndex = safeProfiles.findIndex((profile) => profile.name === selectedProfileName);
             setSelectedIndex(matchingIndex >= 0 ? matchingIndex : 0);
         } else {
             setSelectedIndex(0);
@@ -57,10 +69,19 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
         setIsAdvancedOpen(false);
         setIsScreenConfigOpen(true);
         setIsAsrConfigOpen(true);
-    }, [profiles, selectedProfileName]);
+    }, [safeProfiles, selectedProfileName]);
 
     useEffect(() => {
         if (!selectedProfileName) {
+            return;
+        }
+
+        const currentSelectedName = localProfiles[selectedIndex]?.name;
+        if (
+            currentSelectedName &&
+            unsavedProfileNames.has(currentSelectedName) &&
+            currentSelectedName !== selectedProfileName
+        ) {
             return;
         }
 
@@ -68,7 +89,7 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
         if (matchingIndex >= 0 && matchingIndex !== selectedIndex) {
             setSelectedIndex(matchingIndex);
         }
-    }, [selectedProfileName, localProfiles, selectedIndex]);
+    }, [selectedProfileName, localProfiles, selectedIndex, unsavedProfileNames]);
 
     useEffect(() => {
         if (saveSuccess) {
@@ -89,20 +110,20 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
         return localProfiles[selectedIndex];
     }, [localProfiles, selectedIndex]);
 
-    if (!selectedProfile) {
-        return null;
-    }
-
-    const [profileName, setProfileName] = useState(stripPrf(selectedProfile.name));
-    const [realName, setRealName] = useState(withFallback(selectedProfile.realName));
-    const [vatsimCid, setVatsimCid] = useState(withFallback(selectedProfile.certificate));
-    const [serverAddress, setServerAddress] = useState(withFallback(selectedProfile.server));
-    const [proxyServer, setProxyServer] = useState(withFallback(selectedProfile.proxyServer));
-    const [startupAsr, setStartupAsr] = useState(withFallback(selectedProfile.startupAsr));
-    const [connectToVatsim, setConnectToVatsim] = useState(selectedProfile.connectToVatsim ?? false);
-    const [screenConfig, setScreenConfig] = useState<ScreenConfig | null>(selectedProfile.screenConfig ?? null);
+    const [profileName, setProfileName] = useState(stripPrf(selectedProfile?.name ?? ""));
+    const [realName, setRealName] = useState(withFallback(selectedProfile?.realName ?? null));
+    const [vatsimCid, setVatsimCid] = useState(withFallback(selectedProfile?.certificate ?? null));
+    const [serverAddress, setServerAddress] = useState(withFallback(selectedProfile?.server ?? null));
+    const [proxyServer, setProxyServer] = useState(withFallback(selectedProfile?.proxyServer ?? null));
+    const [startupAsr, setStartupAsr] = useState(withFallback(selectedProfile?.startupAsr ?? null));
+    const [connectToVatsim, setConnectToVatsim] = useState(selectedProfile?.connectToVatsim ?? false);
+    const [screenConfig, setScreenConfig] = useState<ScreenConfig | null>(selectedProfile?.screenConfig ?? null);
 
     useEffect(() => {
+        if (!selectedProfile) {
+            return;
+        }
+
         setProfileName(stripPrf(selectedProfile.name));
         setRealName(withFallback(selectedProfile.realName));
         setVatsimCid(withFallback(selectedProfile.certificate));
@@ -114,7 +135,59 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
         setIsScreenConfigOpen(true);
         setIsAsrConfigOpen(true);
         setIsAdvancedOpen(false);
-    }, [selectedProfile]);
+    }, [selectedProfile?.name]);
+
+    useEffect(() => {
+        if (!selectedProfile || !unsavedProfileNames.has(selectedProfile.name)) {
+            return;
+        }
+
+        setLocalProfiles((previousProfiles) => {
+            const current = previousProfiles[selectedIndex];
+            if (!current) {
+                return previousProfiles;
+            }
+
+            const nextDraft: Profile = {
+                ...current,
+                realName: realName.trim() || null,
+                certificate: vatsimCid.trim() || null,
+                server: serverAddress.trim() || null,
+                proxyServer: proxyServer.trim() || null,
+                startupAsr: startupAsr.trim() || null,
+                connectToVatsim,
+                screenConfig,
+            };
+
+            const unchanged =
+                current.realName === nextDraft.realName &&
+                current.certificate === nextDraft.certificate &&
+                current.server === nextDraft.server &&
+                current.proxyServer === nextDraft.proxyServer &&
+                current.startupAsr === nextDraft.startupAsr &&
+                current.connectToVatsim === nextDraft.connectToVatsim &&
+                current.screenConfig === nextDraft.screenConfig;
+
+            if (unchanged) {
+                return previousProfiles;
+            }
+
+            return previousProfiles.map((profile, index) =>
+                index === selectedIndex ? nextDraft : profile
+            );
+        });
+    }, [
+        selectedProfile?.name,
+        selectedIndex,
+        realName,
+        vatsimCid,
+        serverAddress,
+        proxyServer,
+        startupAsr,
+        connectToVatsim,
+        screenConfig,
+        unsavedProfileNames,
+    ]);
 
     const selectStartupAsr = async () => {
         try {
@@ -137,83 +210,105 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
     };
 
     const saveCurrentProfile = async () => {
+        if (!selectedProfile) {
+            return;
+        }
+
+        if (isSavingProfile) {
+            return;
+        }
+
+        setIsSavingProfile(true);
         const hasPrfExtension = /\.prf$/i.test(selectedProfile.name);
         const nextName = profileName.trim();
         const renamed = nextName ? (hasPrfExtension ? `${nextName}.prf` : nextName) : selectedProfile.name;
 
-        // Detect if this is a cloned profile (ends with _COPY.prf)
-        const isClone = selectedProfile.name.endsWith("_COPY.prf");
-        let cloneFrom: string | null = null;
+        const cloneFrom: string | null = pendingCloneSourceByName[selectedProfile.name] ?? null;
 
-        if (isClone) {
-            // Extract the original profile name by removing _COPY.prf and adding .prf
-            cloneFrom = selectedProfile.name.replace(/_COPY\.prf$/i, ".prf");
-        }
+        try {
+            let updatedProfiles = await invoke<Profile[] | null>("update_profile", {
+                originalName: selectedProfile.name,
+                newName: renamed,
+                realName: realName.trim() || null,
+                certificate: vatsimCid.trim() || null,
+                server: serverAddress.trim() || null,
+                proxyServer: proxyServer.trim() || null,
+                startupAsr: startupAsr.trim() || null,
+                connectToVatsim,
+                configuredLists: selectedProfile.configuredLists,
+                cloneFrom,
+            });
+            if (updatedProfiles) {
+                let profilesWithScreenConfig = updatedProfiles;
 
-        let updatedProfiles = await invoke<Profile[] | null>("update_profile", {
-            originalName: selectedProfile.name,
-            newName: renamed,
-            realName: realName.trim() || null,
-            certificate: vatsimCid.trim() || null,
-            server: serverAddress.trim() || null,
-            proxyServer: proxyServer.trim() || null,
-            startupAsr: startupAsr.trim() || null,
-            connectToVatsim,
-            configuredLists: selectedProfile.configuredLists,
-            cloneFrom,
-        });
-        if (updatedProfiles) {
-            let profilesWithScreenConfig = updatedProfiles;
-
-            // Save screen config if changes were made
-            if (screenConfig) {
-                try {
-                    const profileNameNoExt = renamed.replace(/\.prf$/i, "");
-                    let latestScreenConfig: ScreenConfig | null = null;
-
+                // Save screen config if changes were made
+                if (screenConfig) {
                     try {
-                        latestScreenConfig = await invoke<ScreenConfig>("load_screen_config", {
+                        const profileNameNoExt = renamed.replace(/\.prf$/i, "");
+                        let latestScreenConfig: ScreenConfig | null = null;
+
+                        try {
+                            latestScreenConfig = await invoke<ScreenConfig>("load_screen_config", {
+                                profileName: profileNameNoExt,
+                            });
+                        } catch {
+                            latestScreenConfig = null;
+                        }
+
+                        const mergedScreenConfig: ScreenConfig = {
+                            controller_list: latestScreenConfig?.controller_list ?? screenConfig.controller_list,
+                            metar_list: latestScreenConfig?.metar_list ?? screenConfig.metar_list,
+                            title_bar: screenConfig.title_bar,
+                            display_config: screenConfig.display_config,
+                            connect_sel_to_sil: screenConfig.connect_sel_to_sil,
+                            connect_dep_to_sel: screenConfig.connect_dep_to_sel,
+                            connect_sil_to_top: screenConfig.connect_sil_to_top,
+                        };
+
+                        await invoke<string>("save_screen_config", {
                             profileName: profileNameNoExt,
+                            screenConfig: mergedScreenConfig,
                         });
-                    } catch {
-                        latestScreenConfig = null;
+
+                        profilesWithScreenConfig = updatedProfiles.map((profile) =>
+                            profile.name === renamed
+                                ? { ...profile, screenConfig: mergedScreenConfig }
+                                : profile
+                        );
+                    } catch (error) {
+                        console.error("Failed to save screen config:", error);
                     }
-
-                    const mergedScreenConfig: ScreenConfig = {
-                        controller_list: latestScreenConfig?.controller_list ?? screenConfig.controller_list,
-                        metar_list: latestScreenConfig?.metar_list ?? screenConfig.metar_list,
-                        title_bar: screenConfig.title_bar,
-                        display_config: screenConfig.display_config,
-                        connect_sel_to_sil: screenConfig.connect_sel_to_sil,
-                        connect_dep_to_sel: screenConfig.connect_dep_to_sel,
-                        connect_sil_to_top: screenConfig.connect_sil_to_top,
-                    };
-
-                    await invoke<string>("save_screen_config", {
-                        profileName: profileNameNoExt,
-                        screenConfig: mergedScreenConfig,
-                    });
-
-                    profilesWithScreenConfig = updatedProfiles.map((profile) =>
-                        profile.name === renamed
-                            ? { ...profile, screenConfig: mergedScreenConfig }
-                            : profile
-                    );
-                } catch (error) {
-                    console.error("Failed to save screen config:", error);
                 }
+
+                setLocalProfiles(profilesWithScreenConfig);
+                onSelectProfileName?.(renamed);
+                setUnsavedProfileNames((previous) => {
+                    const updated = new Set(previous);
+                    updated.delete(selectedProfile.name);
+                    updated.delete(renamed);
+                    return updated;
+                });
+                setPendingCloneSourceByName((previous) => {
+                    const updated = { ...previous };
+                    delete updated[selectedProfile.name];
+                    delete updated[renamed];
+                    return updated;
+                });
+
+                setSaveSuccess(true);
+                await onProfilesUpdate?.(profilesWithScreenConfig);
             }
-
-            setLocalProfiles(profilesWithScreenConfig);
-
-            setSaveSuccess(true);
-            onProfilesUpdate?.();
+        } catch (error) {
+            console.error("Failed to save profile:", error);
+        } finally {
+            setIsSavingProfile(false);
         }
     };
 
     const createNewProfile = () => {
+        const newProfileName = "New Profile.prf";
         const newProfile: Profile = {
-            name: "New Profile.prf",
+            name: newProfileName,
             realName: null,
             certificate: null,
             server: null,
@@ -229,11 +324,21 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
             setSelectedIndex(updated.length - 1);
             return updated;
         });
+        setUnsavedProfileNames((previous) => {
+            const updated = new Set(previous);
+            updated.add(newProfileName);
+            return updated;
+        });
     };
 
     const cloneSelectedProfile = () => {
+        if (!selectedProfile) {
+            return;
+        }
+
+        const clonedName = `${stripPrf(selectedProfile.name)}_COPY.prf`;
         const clonedProfile: Profile = {
-            name: `${stripPrf(selectedProfile.name)}_COPY.prf`,
+            name: clonedName,
             realName: selectedProfile.realName,
             certificate: selectedProfile.certificate,
             server: selectedProfile.server,
@@ -249,25 +354,66 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
             setSelectedIndex(updated.length - 1);
             return updated;
         });
+        setUnsavedProfileNames((previous) => {
+            const updated = new Set(previous);
+            updated.add(clonedName);
+            return updated;
+        });
+        setPendingCloneSourceByName((previous) => ({
+            ...previous,
+            [clonedName]: selectedProfile.name,
+        }));
     };
 
     const deleteSelectedProfile = () => {
+        if (!selectedProfile) {
+            return;
+        }
+
         setDeleteConfirmation({
             isOpen: true,
             profileName: stripPrf(selectedProfile.name),
         });
     };
 
+    if (localProfiles.length === 0 || !selectedProfile) {
+        return (
+            <div className="card card-accent">
+                <div className="card-header">
+                    <div className="card-icon">👤</div>
+                    <h2 className="text-xl font-semibold text-white">Profiles</h2>
+                </div>
+                <div className="py-12 text-center">
+                    <div className="mb-4 text-4xl opacity-50">📋</div>
+                    <div className="mb-2 text-xl font-semibold text-secondary-100">No Profiles Found</div>
+                    <div className="text-base text-secondary-500">
+                        No EuroScope profiles are currently configured.
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const confirmDelete = async () => {
         try {
             // Check if this is an unsaved profile (new or cloned but not yet saved)
-            const isUnsavedProfile = selectedProfile.name === "New Profile.prf" || selectedProfile.name.endsWith("_COPY.prf");
+            const isUnsavedProfile = unsavedProfileNames.has(selectedProfile.name);
 
             if (isUnsavedProfile) {
                 // Just remove from local state without calling backend
                 setLocalProfiles((previous) => {
                     const updated = previous.filter((_, index) => index !== selectedIndex);
                     setSelectedIndex((current) => Math.max(0, Math.min(current, updated.length - 1)));
+                    return updated;
+                });
+                setUnsavedProfileNames((previous) => {
+                    const updated = new Set(previous);
+                    updated.delete(selectedProfile.name);
+                    return updated;
+                });
+                setPendingCloneSourceByName((previous) => {
+                    const updated = { ...previous };
+                    delete updated[selectedProfile.name];
                     return updated;
                 });
             } else {
@@ -277,7 +423,7 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                 });
                 if (updatedProfiles) {
                     setLocalProfiles(updatedProfiles);
-                    onProfilesUpdate?.();
+                    await onProfilesUpdate?.(updatedProfiles);
                 }
             }
 
@@ -297,7 +443,7 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                     <div className="mt-4 flex flex-wrap gap-2">
                         {localProfiles.map((profile, index) => {
                             const isActive = index === selectedIndex;
-                            const isNewProfile = profile.name === "New Profile.prf" || profile.name.endsWith("_COPY.prf");
+                            const isNewProfile = unsavedProfileNames.has(profile.name);
 
                             return (
                                 <button
@@ -305,7 +451,9 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                                     type="button"
                                     onClick={() => {
                                         setSelectedIndex(index);
-                                        onSelectProfileName?.(profile.name);
+                                        if (!isNewProfile) {
+                                            onSelectProfileName?.(profile.name);
+                                        }
                                     }}
                                     className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all flex items-center gap-1.5 ${isActive
                                         ? "border-primary-600 bg-primary-600 text-white"
@@ -502,13 +650,14 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
                     <button type="button" className="btn-secondary btn-small" onClick={cloneSelectedProfile}>Clone Profile</button>
                     <button
                         type="button"
+                        disabled={isSavingProfile}
                         className={`btn-small ${saveSuccess
                             ? "rounded-xl border border-green-600 bg-green-600 px-4 py-2 font-semibold text-white"
                             : "btn-primary"
                             }`}
                         onClick={saveCurrentProfile}
                     >
-                        {saveSuccess ? "✓ Saved" : "Save Profile"}
+                        {isSavingProfile ? "Saving..." : saveSuccess ? "✓ Saved" : "Save Profile"}
                     </button>
                 </div>
             </section>
