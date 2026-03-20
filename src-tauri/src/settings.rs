@@ -18,6 +18,332 @@ pub struct ListConfig {
     pub columns: Vec<ListColumn>,
 }
 
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ControllerListConfig {
+    pub visible: bool,
+    pub x: u16,
+    pub y: u16,
+    pub fss: bool,
+    pub ctr: bool,
+    pub app: bool,
+    pub twr: bool,
+    pub gnd: bool,
+    pub atis: bool,
+    pub obs: bool,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TitleBarConfig {
+    pub visible: bool,
+    pub file_name: bool,
+    pub controller_name: bool,
+    pub primary_frequency: bool,
+    pub atis_frequency: bool,
+    pub clock: bool,
+    pub leader: bool,
+    pub filter: bool,
+    pub transition_level: bool,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MetarListConfig {
+    pub visible: bool,
+    pub x: u16,
+    pub y: u16,
+    pub title: bool,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DisplayConfig {
+    pub id: u16,
+    pub position: u16,
+    pub maximized: bool,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ScreenConfig {
+    pub controller_list: ControllerListConfig,
+    pub metar_list: MetarListConfig,
+    pub title_bar: TitleBarConfig,
+    pub display_config: DisplayConfig,
+    pub connect_sel_to_sil: bool,
+    pub connect_dep_to_sel: bool,
+    pub connect_sil_to_top: bool,
+    pub source: String,
+}
+
+impl ControllerListConfig {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        let mut config = Self::default();
+
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').map(|part| part.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let key = parts[0];
+            let value = parts[1];
+
+            match key {
+                "m_ShowControllers" => config.visible = value == "1",
+                "m_ShowFSSControllers" => config.fss = value == "1",
+                "m_ShowCTRControllers" => config.ctr = value == "1",
+                "m_ShowAPPControllers" => config.app = value == "1",
+                "m_ShowTWRControllers" => config.twr = value == "1",
+                "m_ShowGNDControllers" => config.gnd = value == "1",
+                "m_ShowATISControllers" => config.atis = value == "1",
+                "m_ShowOBSControllers" => config.obs = value == "1",
+                "m_ControllerListX" => config.x = parse_u16(value)?,
+                "m_ControllerListY" => config.y = parse_u16(value)?,
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+impl fmt::Display for ControllerListConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "m_ShowControllers:{}\n\
+            m_ShowFSSControllers:{}\n\
+            m_ShowCTRControllers:{}\n\
+            m_ShowAPPControllers:{}\n\
+            m_ShowTWRControllers:{}\n\
+            m_ShowGNDControllers:{}\n\
+            m_ShowATISControllers:{}\n\
+            m_ShowOBSControllers:{}\n\
+            m_ControllerListX:{}\n\
+            m_ControllerListY:{}\n",
+            self.visible as u8,
+            self.fss as u8,
+            self.ctr as u8,
+            self.app as u8,
+            self.twr as u8,
+            self.gnd as u8,
+            self.atis as u8,
+            self.obs as u8,
+            self.x,
+            self.y,
+        )
+    }
+}
+
+impl TitleBarConfig {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        let mut config = Self::default();
+
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').map(|part| part.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let key = parts[0];
+            let value = parts[1];
+
+            match key {
+                "m_ShowTitle" => config.visible = value == "1",
+                "m_ShowTitleFileName" => config.file_name = value == "1",
+                "m_ShowTitleController" => config.controller_name = value == "1",
+                "m_ShowTitlePrimaryFreq" => config.primary_frequency = value == "1",
+                "m_ShowTitleAtisFreq" => config.atis_frequency = value == "1",
+                "m_ShowTitleClock" => config.clock = value == "1",
+                "m_ShowTitleLeader" => config.leader = value == "1",
+                "m_ShowTitleFilter" => config.filter = value == "1",
+                "m_ShowTitleTrans" => config.transition_level = value == "1",
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+impl fmt::Display for TitleBarConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "m_ShowTitle:{}\n\
+            m_ShowTitleFileName:{}\n\
+            m_ShowTitleController:{}\n\
+            m_ShowTitlePrimaryFreq:{}\n\
+            m_ShowTitleAtisFreq:{}\n\
+            m_ShowTitleClock:{}\n\
+            m_ShowTitleLeader:{}\n\
+            m_ShowTitleFilter:{}\n\
+            m_ShowTitleTrans:{}\n",
+            self.visible as u8,
+            self.file_name as u8,
+            self.controller_name as u8,
+            self.primary_frequency as u8,
+            self.atis_frequency as u8,
+            self.clock as u8,
+            self.leader as u8,
+            self.filter as u8,
+            self.transition_level as u8,
+        )
+    }
+}
+
+impl MetarListConfig {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        let mut config = Self::default();
+
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').map(|part| part.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let key = parts[0];
+            let value = parts[1];
+
+            match key {
+                "m_METARList" => config.visible = value == "1",
+                "m_ShowTitleMetar" => config.title = value == "1",
+                "m_MetarListX" => config.x = parse_u16(value)?,
+                "m_MetarListY" => config.y = parse_u16(value)?,
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+impl fmt::Display for MetarListConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "m_METARList:{}\n\
+            m_ShowTitleMetar:{}\n\
+            m_MetarListX:{}\n\
+            m_MetarListY:{}\n",
+            self.visible as u8, self.title as u8, self.x, self.y,
+        )
+    }
+}
+
+impl DisplayConfig {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        let mut config = Self::default();
+
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').map(|part| part.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let key = parts[0];
+            let value = parts[1];
+
+            match key {
+                "m_ScreenNumber" => config.id = parse_u16(value)?,
+                "m_ScreenPosition" => config.position = parse_u16(value)?,
+                "m_ScreenMaximized" => config.maximized = value == "1",
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+impl fmt::Display for DisplayConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "m_ScreenNumber:{}\n\
+            m_ScreenPosition:{}\n\
+            m_ScreenMaximized:{}\n",
+            self.id, self.position, self.maximized as u8,
+        )
+    }
+}
+
+impl ScreenConfig {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        let mut config = Self {
+            controller_list: ControllerListConfig::parse(content)?,
+            metar_list: MetarListConfig::parse(content)?,
+            title_bar: TitleBarConfig::parse(content)?,
+            display_config: DisplayConfig::parse(content)?,
+            source: content.to_string(),
+            ..Default::default()
+        };
+
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').map(|part| part.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let key = parts[0];
+            let value = parts[1];
+
+            match key {
+                "m_ConnectSELtoSIL" => config.connect_sel_to_sil = value == "1",
+                "m_ConnectDEPtoSEL" => config.connect_dep_to_sel = value == "1",
+                "m_ConnectSILtoTOP" => config.connect_sil_to_top = value == "1",
+                _ => {}
+            }
+        }
+
+        Ok(config)
+    }
+}
+
+impl fmt::Display for ScreenConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let output = format!(
+            "{}\n\
+            {}\n\
+            {}\n\
+            {}\n\
+            m_ConnectSELtoSIL:{}\n\
+            m_ConnectDEPtoSEL:{}\n\
+            m_ConnectSILtoTOP:{}\n",
+            self.controller_list,
+            self.metar_list,
+            self.title_bar,
+            self.display_config,
+            self.connect_sel_to_sil as u8,
+            self.connect_dep_to_sel as u8,
+            self.connect_sil_to_top as u8,
+        );
+
+        let written_keys: Vec<&str> = output
+            .lines()
+            .map(|line| {
+                line.split(':')
+                    .map(|part| part.trim())
+                    .nth(0)
+                    .expect("we literally just constructed it")
+            })
+            .collect();
+
+        let untouched_lines: Vec<&str> = self
+            .source
+            .lines()
+            .filter(|line| {
+                let key = line
+                    .split(':')
+                    .map(|part| part.trim())
+                    .nth(0)
+                    .expect("we literally just parsed it");
+
+                !written_keys.contains(&key)
+            })
+            .collect();
+
+        write!(f, "{}{}\n", output, untouched_lines.join("\n"))
+    }
+}
+
 impl ListColumn {
     pub fn parse(content: &str) -> Result<Self, String> {
         let components: Vec<String> = content
@@ -391,5 +717,137 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(format!("{}", config), expected);
+    }
+
+    #[test]
+    pub fn parse_screen_settings() {
+        let content = r"m_ShowControllers:1
+                        m_ShowAircraft:0
+                        m_ShowTextMessages:0
+                        m_ShowTitle:1
+                        m_ShowTitleFileName:1
+                        m_ShowTitleController:1
+                        m_ShowTitlePrimaryFreq:1
+                        m_ShowTitleAtisFreq:0
+                        m_ShowTitleClock:1
+                        m_ShowTitleLeader:1
+                        m_ShowTitleFilter:1
+                        m_ShowTitleTrans:1
+                        m_ShowVoiceRoomUsers:0
+                        m_ShowFSSControllers:1
+                        m_ShowCTRControllers:1
+                        m_ShowAPPControllers:1
+                        m_ShowTWRControllers:1
+                        m_ShowGNDControllers:1
+                        m_ShowATISControllers:0
+                        m_ShowOBSControllers:1
+                        m_ShowUnidentifiedControllers:0
+                        m_ShowFreqUsers:1
+                        m_ShowAtisUsers:1
+                        m_ShowArrivalPlanes:1
+                        m_ShowDeparturePlanes:1
+                        m_ShowOverflightPlanes:1
+                        SET_ShowTrackingPlanes:1
+                        m_METARList:1
+                        m_ShowTitleMetar:0
+                        m_ConnectSELtoSIL:1
+                        m_ConnectDEPtoSEL:1
+                        m_ConnectSILtoTOP:0
+                        m_ScreenNumber:1
+                        m_ScreenPosition:0
+                        m_ScreenMaximized:0
+                        m_ShowTitleSelectedAc:1
+                        m_PlanesListX:4
+                        m_PlanesListY:398
+                        m_MetarListX:1598
+                        m_MetarListY:56
+                        m_VoiceListX:959
+                        m_VoiceListY:83
+                        m_ControllerListX:1727
+                        m_ControllerListY:55
+                        m_ShowPlaneRangeRingsTracked:0
+                        m_ShowPlaneRangeRingsUntracked:0
+                        m_PlaneRangeRingsDistance1:1.5
+                        m_PlaneRangeRingsDistance2:2.5
+                        m_PlaneRangeRingsDistance3:5.0
+                        m_PlaneRangeRingsDistance4:0.0
+                        m_ShowTooltips:1
+                        m_OnTheGroundAltitude:5000
+                        m_OnTheGroundSpeed:50
+                        m_ShowCdtOnCflCheck:0
+                        m_ShowTsVccsMiniControl:1
+                        ScenarioEditorX:731
+                        ScenarioEditorY:227
+                        m_ShowSTARControllers:1
+                        ";
+
+        let screen_config = ScreenConfig::parse(content).unwrap();
+        let formatted = format!("{}", screen_config);
+
+        // Extract key-value pairs from original content
+        let original_pairs: std::collections::HashMap<String, String> = content
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                if let Some(colon_pos) = trimmed.find(':') {
+                    let key = trimmed[..colon_pos].to_string();
+                    let value = trimmed[colon_pos + 1..].to_string();
+                    Some((key, value))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Extract key-value pairs from formatted content
+        let formatted_pairs: std::collections::HashMap<String, String> = formatted
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                if let Some(colon_pos) = trimmed.find(':') {
+                    let key = trimmed[..colon_pos].to_string();
+                    let value = trimmed[colon_pos + 1..].to_string();
+                    Some((key, value))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Verify all original key-value pairs are present in formatted output
+        for (key, value) in &original_pairs {
+            assert_eq!(
+                formatted_pairs.get(key),
+                Some(value),
+                "Key-value mismatch for key '{}': expected '{}', got '{:?}'",
+                key,
+                value,
+                formatted_pairs.get(key)
+            );
+        }
+
+        // Verify no extra key-value pairs in formatted output
+        for (key, _) in &formatted_pairs {
+            assert!(
+                original_pairs.contains_key(key),
+                "Extra key found in formatted output: '{}'",
+                key
+            );
+        }
+
+        // Verify no duplicate keys in formatted output (HashMap guarantees this, but verify the counts match)
+        assert_eq!(
+            original_pairs.len(),
+            formatted_pairs.len(),
+            "Number of key-value pairs mismatch: original has {}, formatted has {}",
+            original_pairs.len(),
+            formatted_pairs.len()
+        );
     }
 }
