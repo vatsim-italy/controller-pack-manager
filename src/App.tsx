@@ -303,6 +303,13 @@ function App(
         return titles[activeSection];
     }, [activeSection]);
 
+    const selectedProfile = useMemo(() => {
+        if (!selectedProfileName || !appProfiles) {
+            return null;
+        }
+        return appProfiles.find((profile) => profile.name === selectedProfileName) ?? null;
+    }, [appProfiles, selectedProfileName]);
+
     const renderSection = () => {
         if (activeSection === "sector-file") {
             return (
@@ -343,6 +350,7 @@ function App(
                     resumeLayout={loadedConfigs}
                     controllerListConfig={loadedControllerList}
                     metarListConfig={loadedMetarList}
+                    displayPosition={selectedProfile?.screenConfig?.display_config?.position ?? 0}
                     ref={listsSectionRef}
                 />
             );

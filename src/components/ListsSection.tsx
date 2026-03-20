@@ -11,6 +11,7 @@ interface ListsSectionProps {
     resumeLayout: ListConfig[] | null;
     controllerListConfig: ControllerListConfig | null;
     metarListConfig: MetarListConfig | null;
+    displayPosition: number;
 }
 
 type RadarResolutionKey = "custom" | "1080p" | "2k" | "4k";
@@ -52,6 +53,27 @@ const getDetectedResolution = (): { width: number; height: number } => {
     const width = window.screen.width;
     const height = window.screen.height;
     return { width, height };
+};
+
+const getDisplayPositionScale = (displayPosition: number): { widthFactor: number; heightFactor: number } => {
+    switch (displayPosition) {
+        case 1: // Left Half
+        case 2: // Right Half
+            return { widthFactor: 0.5, heightFactor: 1 };
+        case 3: // Top Half
+        case 4: // Bottom Half
+            return { widthFactor: 1, heightFactor: 0.5 };
+        case 5: // Left Third
+        case 6: // Middle Third
+        case 7: // Right Third
+            return { widthFactor: 1 / 3, heightFactor: 1 };
+        case 8: // Left Two Third
+        case 9: // Right Two Third
+            return { widthFactor: 2 / 3, heightFactor: 1 };
+        case 0: // Full
+        default:
+            return { widthFactor: 1, heightFactor: 1 };
+    }
 };
 
 const columnIdFromValues = (values: string[]) => values[0] ?? "-";
@@ -115,7 +137,7 @@ export const ListsSection = forwardRef<
         getCurrentScreenConfig: () => ListsSectionScreenConfig;
     },
     ListsSectionProps
->(({ listConfigs, resumeLayout, controllerListConfig, metarListConfig }, ref) => {
+>(({ listConfigs, resumeLayout, controllerListConfig, metarListConfig, displayPosition }, ref) => {
     const detected = useMemo(() => getDetectedResolution(), []);
     const charWidth = useMemo(() => measureCharacterWidth(), []);
 
@@ -347,7 +369,14 @@ export const ListsSection = forwardRef<
         return () => window.cancelAnimationFrame(frameId);
     }, [dropdownState]);
 
-    const activeResolution = RADAR_RESOLUTIONS[resolution];
+    const baseResolution = RADAR_RESOLUTIONS[resolution];
+    const activeResolution = useMemo(() => {
+        const { widthFactor, heightFactor } = getDisplayPositionScale(displayPosition);
+        return {
+            width: Math.round(baseResolution.width * widthFactor),
+            height: Math.round(baseResolution.height * heightFactor),
+        };
+    }, [baseResolution.height, baseResolution.width, displayPosition]);
 
     const visibleRadarLists = useMemo(
         () => radarLists.filter((listConfig) => listConfig.visible),

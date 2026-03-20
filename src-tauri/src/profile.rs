@@ -110,6 +110,29 @@ pub fn profile_patch_lines(profile: &Profile) -> Vec<String> {
     lines
 }
 
+fn is_last_session_line_for_managed_key(line: &str) -> bool {
+    let mut parts = line.split_whitespace();
+    let section = match parts.next() {
+        Some(value) => value,
+        None => return false,
+    };
+
+    if !section.eq_ignore_ascii_case("LastSession") {
+        return false;
+    }
+
+    match parts.next() {
+        Some(key) => {
+            key.eq_ignore_ascii_case("realname")
+                || key.eq_ignore_ascii_case("certificate")
+                || key.eq_ignore_ascii_case("server")
+                || key.eq_ignore_ascii_case("tovatsim")
+                || key.eq_ignore_ascii_case("proxyserver")
+        }
+        None => false,
+    }
+}
+
 pub fn patch_profile_settings_lines(
     profile_file_path: &Path,
     list_ids: Vec<String>,
@@ -177,14 +200,7 @@ pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result
 
     let mut kept_lines: Vec<String> = content
         .lines()
-        .filter(|line| {
-            let lower = line.to_ascii_lowercase();
-            !(lower.starts_with("lastsession realname ")
-                || lower.starts_with("lastsession certificate ")
-                || lower.starts_with("lastsession server ")
-                || lower.starts_with("lastsession tovatsim ")
-                || lower.starts_with("lastsession proxyserver "))
-        })
+        .filter(|line| !is_last_session_line_for_managed_key(line))
         .map(|line| line.to_string())
         .collect();
 
@@ -290,14 +306,7 @@ pub fn update_profile_and_reload(
         // Parse existing lines and filter out the fields we're updating
         let mut kept_lines: Vec<String> = base_content
             .lines()
-            .filter(|line| {
-                let lower = line.to_ascii_lowercase();
-                !(lower.starts_with("lastsession realname ")
-                    || lower.starts_with("lastsession certificate ")
-                    || lower.starts_with("lastsession server ")
-                    || lower.starts_with("lastsession tovatsim ")
-                    || lower.starts_with("lastsession proxyserver "))
-            })
+            .filter(|line| !is_last_session_line_for_managed_key(line))
             .map(|line| line.to_string())
             .collect();
 
