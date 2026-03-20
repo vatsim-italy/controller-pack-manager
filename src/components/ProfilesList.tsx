@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Profile, ScreenConfig } from "../main";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { ScreenConfigSection } from "./ScreenConfigSection";
 
 interface ProfilesListProps {
     profiles: Profile[] | null;
+    euroscopeConfigPath?: string | null;
     selectedProfileName?: string | null;
     onSelectProfileName?: (name: string) => void;
     onProfilesUpdate?: () => void;
@@ -13,7 +15,7 @@ interface ProfilesListProps {
 const withFallback = (value: string | null, fallback = "") => value ?? fallback;
 const stripPrf = (value: string) => value.replace(/\.prf$/i, "");
 
-export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileName, onProfilesUpdate }: ProfilesListProps) => {
+export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileName, onSelectProfileName, onProfilesUpdate }: ProfilesListProps) => {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="card card-accent">
@@ -34,6 +36,8 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
 
     const [localProfiles, setLocalProfiles] = useState<Profile[]>(profiles);
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const [isScreenConfigOpen, setIsScreenConfigOpen] = useState(true);
+    const [isAsrConfigOpen, setIsAsrConfigOpen] = useState(true);
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; profileName: string }>({
@@ -50,6 +54,8 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
             setSelectedIndex(0);
         }
         setIsAdvancedOpen(false);
+        setIsScreenConfigOpen(true);
+        setIsAsrConfigOpen(true);
     }, [profiles, selectedProfileName]);
 
     useEffect(() => {
@@ -91,6 +97,7 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
     const [vatsimCid, setVatsimCid] = useState(withFallback(selectedProfile.certificate));
     const [serverAddress, setServerAddress] = useState(withFallback(selectedProfile.server));
     const [proxyServer, setProxyServer] = useState(withFallback(selectedProfile.proxyServer));
+    const [startupAsr, setStartupAsr] = useState(withFallback(selectedProfile.startupAsr));
     const [connectToVatsim, setConnectToVatsim] = useState(selectedProfile.connectToVatsim ?? false);
     const [screenConfig, setScreenConfig] = useState<ScreenConfig | null>(selectedProfile.screenConfig ?? null);
 
@@ -100,10 +107,33 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
         setVatsimCid(withFallback(selectedProfile.certificate));
         setServerAddress(withFallback(selectedProfile.server));
         setProxyServer(withFallback(selectedProfile.proxyServer));
+        setStartupAsr(withFallback(selectedProfile.startupAsr));
         setConnectToVatsim(selectedProfile.connectToVatsim ?? false);
         setScreenConfig(selectedProfile.screenConfig ?? null);
+        setIsScreenConfigOpen(true);
+        setIsAsrConfigOpen(true);
         setIsAdvancedOpen(false);
     }, [selectedProfile]);
+
+    const selectStartupAsr = async () => {
+        try {
+            const selection = await open({
+                title: "Select Startup ASR",
+                defaultPath: euroscopeConfigPath || undefined,
+                multiple: false,
+                filters: [
+                    { name: "ASR Files", extensions: ["asr"] },
+                    { name: "All Files", extensions: ["*"] },
+                ],
+            });
+
+            if (typeof selection === "string") {
+                setStartupAsr(selection);
+            }
+        } catch (error) {
+            console.error("Failed to select startup ASR:", error);
+        }
+    };
 
     const saveCurrentProfile = async () => {
         const hasPrfExtension = /\.prf$/i.test(selectedProfile.name);
@@ -126,6 +156,7 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
             certificate: vatsimCid.trim() || null,
             server: serverAddress.trim() || null,
             proxyServer: proxyServer.trim() || null,
+            startupAsr: startupAsr.trim() || null,
             connectToVatsim,
             configuredLists: selectedProfile.configuredLists,
             cloneFrom,
@@ -187,6 +218,7 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
             server: null,
             connectToVatsim: false,
             proxyServer: null,
+            startupAsr: null,
             configuredLists: new Array(),
             screenConfig: null,
         };
@@ -206,6 +238,7 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
             server: selectedProfile.server,
             connectToVatsim: selectedProfile.connectToVatsim ?? false,
             proxyServer: selectedProfile.proxyServer,
+            startupAsr: selectedProfile.startupAsr,
             configuredLists: selectedProfile.configuredLists,
             screenConfig: selectedProfile.screenConfig,
         };
@@ -343,12 +376,69 @@ export const ProfilesList = ({ profiles, selectedProfileName, onSelectProfileNam
                         </label>
                     </div>
 
-                    <ScreenConfigSection
-                        screenConfig={screenConfig}
-                        onChange={(newConfig) => {
-                            setScreenConfig(newConfig);
-                        }}
-                    />
+                    <div className="overflow-hidden rounded-xl border border-secondary-600 bg-secondary-700/30">
+                        <button
+                            type="button"
+                            onClick={() => setIsScreenConfigOpen((previous) => !previous)}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary-700/60"
+                        >
+                            <div>
+                                <p className="text-sm font-semibold text-white">Screen Configuration</p>
+                            </div>
+                            <span className={`text-lg leading-none text-secondary-500 transition-transform ${isScreenConfigOpen ? "rotate-180" : ""}`}>
+                                ⌄
+                            </span>
+                        </button>
+
+                        {isScreenConfigOpen && (
+                            <div className="border-t border-secondary-600 bg-dark-header/40 px-4 py-4">
+                                <ScreenConfigSection
+                                    screenConfig={screenConfig}
+                                    onChange={(newConfig) => {
+                                        setScreenConfig(newConfig);
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border border-secondary-600 bg-secondary-700/30">
+                        <button
+                            type="button"
+                            onClick={() => setIsAsrConfigOpen((previous) => !previous)}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary-700/60"
+                        >
+                            <div>
+                                <p className="text-sm font-semibold text-white">ASR Configuration</p>
+                            </div>
+                            <span className={`text-lg leading-none text-secondary-500 transition-transform ${isAsrConfigOpen ? "rotate-180" : ""}`}>
+                                ⌄
+                            </span>
+                        </button>
+
+                        {isAsrConfigOpen && (
+                            <div className="space-y-2 border-t border-secondary-600 bg-dark-header/40 px-4 py-4">
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-secondary-100">
+                                    <span className="font-semibold text-secondary-300">Startup ASR:</span>
+                                    <span className="break-all text-secondary-400">{startupAsr || "None"}</span>
+                                    <button
+                                        type="button"
+                                        onClick={selectStartupAsr}
+                                        className="rounded-lg border border-secondary-500 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-100 hover:border-secondary-400 transition-colors"
+                                    >
+                                        {startupAsr ? "Change" : "Add"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStartupAsr("")}
+                                        className="rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-1.5 text-sm font-medium text-secondary-300 hover:border-secondary-500 transition-colors"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="overflow-hidden rounded-xl border border-secondary-600 bg-secondary-700/30">
                         <button

@@ -15,6 +15,7 @@ pub struct Profile {
     pub server: Option<String>,
     pub connect_to_vatsim: Option<bool>,
     pub proxy_server: Option<String>,
+    pub startup_asr: Option<String>,
     pub configured_lists: Vec<(String, String)>,
     pub screen_config: Option<ScreenConfig>,
 }
@@ -35,6 +36,8 @@ impl Profile {
 
             if parts[0] == "LastSession" {
                 Self::parse_last_session_info(&mut profile, &parts);
+            } else if parts[0] == "RecentFiles" {
+                Self::parse_recent_files_info(&mut profile, &parts);
             } else if parts[0] == "Settings" {
                 if let Err(error) = Self::parse_settings_info(&mut profile, &parts) {
                     dbg!(
@@ -81,6 +84,16 @@ impl Profile {
             .push((list_id.to_string(), config_file_path));
 
         Ok(())
+    }
+
+    pub fn parse_recent_files_info(profile: &mut Profile, parts: &Vec<&str>) {
+        if parts.len() < 3 {
+            return;
+        }
+
+        if parts[1].eq_ignore_ascii_case("Recent1") {
+            profile.startup_asr = Some(parts[2..].join(" "));
+        }
     }
 }
 
@@ -131,6 +144,45 @@ fn is_last_session_line_for_managed_key(line: &str) -> bool {
         }
         None => false,
     }
+}
+
+fn is_recent_files_recent1_line(line: &str) -> bool {
+    let mut parts = line.split_whitespace();
+    let section = match parts.next() {
+        Some(value) => value,
+        None => return false,
+    };
+
+    if !section.eq_ignore_ascii_case("RecentFiles") {
+        return false;
+    }
+
+    matches!(parts.next(), Some(key) if key.eq_ignore_ascii_case("Recent1"))
+}
+
+fn normalize_profile_relative_path(path: &str, euroscope_config_dir: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let candidate = Path::new(trimmed);
+    let was_absolute = candidate.is_absolute();
+    let mut normalized = if candidate.is_absolute() {
+        match candidate.strip_prefix(Path::new(euroscope_config_dir)) {
+            Ok(relative) => relative.to_string_lossy().to_string(),
+            Err(_) => trimmed.to_string(),
+        }
+    } else {
+        trimmed.to_string()
+    };
+
+    normalized = normalized.replace('/', "\\");
+    if !was_absolute && !normalized.is_empty() && !normalized.starts_with('\\') {
+        normalized.insert(0, '\\');
+    }
+
+    normalized
 }
 
 pub fn patch_profile_settings_lines(
@@ -200,11 +252,19 @@ pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result
 
     let mut kept_lines: Vec<String> = content
         .lines()
-        .filter(|line| !is_last_session_line_for_managed_key(line))
+        .filter(|line| {
+            !is_last_session_line_for_managed_key(line) && !is_recent_files_recent1_line(line)
+        })
         .map(|line| line.to_string())
         .collect();
 
     kept_lines.extend(profile_patch_lines(profile));
+    if let Some(startup_asr) = &profile.startup_asr {
+        let trimmed = startup_asr.trim();
+        if !trimmed.is_empty() {
+            kept_lines.push(format!("RecentFiles\tRecent1\t{}", trimmed));
+        }
+    }
     let mut patched = kept_lines.join("\n");
 
     if !patched.is_empty() {
@@ -269,9 +329,15 @@ pub fn update_profile_and_reload(
     server: Option<String>,
     connect_to_vatsim: Option<bool>,
     proxy_server: Option<String>,
+    startup_asr: Option<String>,
     configured_lists: Vec<(String, String)>,
     clone_from: Option<String>,
 ) -> Result<Vec<Profile>, String> {
+    let normalized_startup_asr = startup_asr
+        .as_deref()
+        .map(|path| normalize_profile_relative_path(path, euroscope_config_dir))
+        .filter(|path| !path.is_empty());
+
     let profile_to_update = Profile {
         name: new_name.clone(),
         real_name,
@@ -279,6 +345,7 @@ pub fn update_profile_and_reload(
         server,
         connect_to_vatsim,
         proxy_server,
+        startup_asr: normalized_startup_asr,
         configured_lists,
         screen_config: None,
     };
@@ -306,12 +373,17 @@ pub fn update_profile_and_reload(
         // Parse existing lines and filter out the fields we're updating
         let mut kept_lines: Vec<String> = base_content
             .lines()
-            .filter(|line| !is_last_session_line_for_managed_key(line))
+            .filter(|line| {
+                !is_last_session_line_for_managed_key(line) && !is_recent_files_recent1_line(line)
+            })
             .map(|line| line.to_string())
             .collect();
 
         // Apply patches with new values
         kept_lines.extend(profile_patch_lines(&profile_to_update));
+        if let Some(startup_asr) = &profile_to_update.startup_asr {
+            kept_lines.push(format!("RecentFiles\tRecent1\t{}", startup_asr));
+        }
         let mut patched = kept_lines.join("\n");
 
         if !patched.is_empty() {

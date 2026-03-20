@@ -14,6 +14,7 @@ export type Profile = {
     connectToVatsim: boolean | null,
     configuredLists: [string, string][],
     proxyServer: string | null,
+    startupAsr: string | null,
     screenConfig: ScreenConfig | null,
 }
 

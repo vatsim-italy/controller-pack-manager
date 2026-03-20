@@ -336,6 +336,7 @@ function App(
             return (
                 <ProfilesList
                     profiles={appProfiles}
+                    euroscopeConfigPath={euroscopeConfigPath}
                     selectedProfileName={selectedProfileName}
                     onSelectProfileName={setSelectedProfileName}
                     onProfilesUpdate={handleProfilesUpdate}
