@@ -198,23 +198,36 @@ pub fn patch_profile_settings_lines(
         )
     })?;
 
-    // Filter out Settings lines for the list IDs we're updating
+    fn should_remove_managed_list_settings_line(line: &str, list_ids: &[String]) -> bool {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 3 {
+            return false;
+        }
+
+        if !parts[0].eq_ignore_ascii_case("Settings") {
+            return false;
+        }
+
+        let settings_key = parts[1];
+        let path = parts[2..].join(" ");
+        let lower_path = path.to_ascii_lowercase();
+
+        let is_known_list_id = settings_key
+            .strip_prefix("Settingsfile")
+            .map(|id_part| {
+                list_ids
+                    .iter()
+                    .any(|known_id| known_id.eq_ignore_ascii_case(id_part))
+            })
+            .unwrap_or(false);
+
+        is_known_list_id || lower_path.contains("list") || lower_path.contains("italyctr")
+    }
+
+    // Filter out previous managed list settings before writing fresh entries.
     let mut kept_lines: Vec<String> = content
         .lines()
-        .filter(|line| {
-            let lower = line.to_ascii_lowercase();
-            if lower.starts_with("settings\tsettingsfile") {
-                // Extract the list ID from the line
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() >= 2 {
-                    if let Some(id_part) = parts[1].strip_prefix("Settingsfile") {
-                        // Check if this list ID is in our list_ids
-                        return !list_ids.iter().any(|lid| lid == id_part);
-                    }
-                }
-            }
-            true
-        })
+        .filter(|line| !should_remove_managed_list_settings_line(line, &list_ids))
         .map(|line| line.to_string())
         .collect();
 

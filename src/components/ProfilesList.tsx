@@ -189,6 +189,19 @@ export const ProfilesList = ({ profiles, euroscopeConfigPath, selectedProfileNam
         unsavedProfileNames,
     ]);
 
+    // CRITICAL: Sync localProfiles to appProfiles in real-time
+    // This ensures ListsSection and other components always have current profile data,
+    // including unsaved profiles (new, cloned, edited)
+    useEffect(() => {
+        // Don't sync during a save operation to avoid race conditions
+        if (isSavingProfile) {
+            return;
+        }
+
+        // Sync localProfiles to parent app state
+        onProfilesUpdate?.(localProfiles);
+    }, [localProfiles, isSavingProfile, onProfilesUpdate]);
+
     const selectStartupAsr = async () => {
         try {
             const selection = await open({

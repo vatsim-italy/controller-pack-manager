@@ -190,6 +190,18 @@ function App(
             setLoadedConfigs(null);
 
             try {
+                // Check if profile exists in appProfiles (handles both saved and unsaved profiles)
+                const profileInMemory = appProfiles?.find((p) => p.name === selectedProfileName);
+
+                // If profile exists in memory with configured lists, use those directly
+                if (profileInMemory && profileInMemory.configuredLists && profileInMemory.configuredLists.length > 0) {
+                    if (!cancelled) {
+                        setLoadedConfigs(profileInMemory.configuredLists);
+                    }
+                    return;
+                }
+
+                // Otherwise, load from disk (for profiles that haven't been loaded into appProfiles yet)
                 const loadedLayout = await invoke<ListConfig[]>("load_layout", {
                     profileName: selectedProfileName.replace(/\.prf$/i, ""),
                 });
@@ -209,7 +221,7 @@ function App(
         return () => {
             cancelled = true;
         };
-    }, [selectedProfileName]);
+    }, [selectedProfileName, appProfiles]);
 
     useEffect(() => {
         if (!selectedProfileName) {
@@ -220,6 +232,20 @@ function App(
 
         const loadScreenConfig = async () => {
             try {
+                // Check if profile exists in appProfiles with screenConfig
+                const profileInMemory = appProfiles?.find((p) => p.name === selectedProfileName);
+
+                // If profile has screenConfig in memory, use that directly
+                if (profileInMemory && profileInMemory.screenConfig) {
+                    if (!cancelled) {
+                        const config = profileInMemory.screenConfig;
+                        setLoadedControllerList(config.controller_list ?? null);
+                        setLoadedMetarList(config.metar_list ?? null);
+                    }
+                    return;
+                }
+
+                // Otherwise, load from disk
                 const config = await invoke<ScreenConfig>("load_screen_config", {
                     profileName: selectedProfileName.replace(/\.prf$/i, ""),
                 });
@@ -253,7 +279,7 @@ function App(
         return () => {
             cancelled = true;
         };
-    }, [selectedProfileName]);
+    }, [selectedProfileName, appProfiles]);
 
     useEffect(() => {
         if (!selectedProfileName) {
@@ -270,6 +296,14 @@ function App(
             // Re-fetch layout when returning to Lists section
             (async () => {
                 try {
+                    // Check appProfiles first for in-memory data
+                    const profileInMemory = appProfiles?.find((p) => p.name === selectedProfileName);
+                    if (profileInMemory && profileInMemory.configuredLists && profileInMemory.configuredLists.length > 0) {
+                        setLoadedConfigs(profileInMemory.configuredLists);
+                        return;
+                    }
+
+                    // Otherwise load from disk
                     const loadedLayout = await invoke<ListConfig[]>("load_layout", {
                         profileName: selectedProfileName.replace(/\.prf$/i, ""),
                     });
@@ -279,7 +313,7 @@ function App(
                 }
             })();
         }
-    }, [activeSection, selectedProfileName]);
+    }, [activeSection, selectedProfileName, appProfiles]);
 
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
