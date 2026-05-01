@@ -55,11 +55,7 @@ pub fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), String> {
 
 pub fn clear_directory(path: &Path) -> Result<(), String> {
     if path.exists() {
-        fs::remove_dir_all(path).map_err(|error| {
-            format!("unable to clear directory '{}': {}", path.display(), error)
-        })?;
+        fs::remove_dir_all(path).map_err(|e| format!("Failed to clear {}: {}", path.display(), e))?;
     }
-
-    fs::create_dir_all(path)
-        .map_err(|error| format!("unable to create directory '{}': {}", path.display(), error))
+    fs::create_dir_all(path).map_err(|e| format!("Failed to recreate {}: {}", path.display(), e))
 }

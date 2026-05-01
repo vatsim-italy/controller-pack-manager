@@ -7,6 +7,7 @@ use crate::plugin::{
     get_installed_plugin_version as read_installed_plugin_version,
     get_latest_plugin_installable_version as read_latest_plugin_installable_version,
     get_plugin_dev_releases_opt_in as read_plugin_dev_releases_opt_in,
+    get_plugin_releases,
     run_get_latest_plugin_changelog, run_update_plugin_version,
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
@@ -121,11 +122,23 @@ pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<S
             "unable to patch hoppie code: no hoppie code stored in app state".to_string()
         })?;
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let (changelog, version) = tauri::async_runtime::spawn_blocking(move || {
         run_update_airac_version(euroscope_config_dir, existing_profiles, hoppie_code)
     })
     .await
-    .map_err(|error| format!("update task failed: {}", error))?
+    .map_err(|error| format!("update task failed: {}", error))??;
+
+    {
+        let mut installed = state.installed_airac_version.lock()
+            .map_err(|e| e.to_string())?;
+        *installed = Some(version);
+
+        let mut available = state.new_airac_version_available.lock()
+            .map_err(|e| e.to_string())?;
+        *available = Some(false);
+    }
+
+    Ok(changelog)
 }
 
 #[tauri::command]
@@ -201,6 +214,13 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
 #[tauri::command]
 pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String> {
     read_latest_plugin_installable_version()
+}
+
+#[tauri::command]
+pub async fn fetch_plugin_releases() -> Result<crate::plugin::PluginApiResponse, String> {
+    tauri::async_runtime::spawn_blocking(get_plugin_releases)
+        .await
+        .map_err(|error| format!("fetch plugin releases task failed: {}", error))?
 }
 
 #[tauri::command]

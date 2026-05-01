@@ -1,34 +1,47 @@
 use crate::config::{read_config_or_default, update_config};
 use crate::github_http::{
-    download_bytes, download_release_asset_bytes, fetch_latest_release, resolve_github_token,
+    download_bytes, resolve_github_token,
 };
 use crate::utils::clear_directory;
+use sha2::{Sha256, Digest};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const LATEST_RELEASE_API_URL: &str =
-    "https://api.github.com/repos/vatsim-italy/plugin/releases/latest";
-const RELEASES_API_URL: &str =
-    "https://api.github.com/repos/vatsim-italy/plugin/releases?per_page=30";
+const RELEASES_API_URL: &str = "https://www.vatita.net/api/plugin";
 const PLUGIN_FOLDER_NAME: &str = "VATITA Controller Plugin";
 const PLUGIN_ASSET_NAME: &str = "VCP.dll";
 
-#[derive(Debug, serde::Deserialize)]
-struct PluginRelease {
-    #[serde(default)]
-    tag_name: String,
-    #[serde(default)]
-    draft: bool,
-    #[serde(default)]
-    prerelease: bool,
-    #[serde(default)]
-    body: String,
-    #[serde(default)]
-    assets: Vec<crate::github_http::GitHubReleaseAsset>,
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct Artifact {
+    pub id: u64,
+    pub name: String,
+    pub digest: Option<String>,
 }
 
-fn fetch_releases(token: &str) -> Result<Vec<PluginRelease>, String> {
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PluginRelease {
+    pub id: u64,
+    pub title: String,
+    pub changelog: String,
+    pub artifacts: Vec<Artifact>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PluginVersionHistory {
+    pub digest: String,
+    pub name: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PluginApiResponse {
+    pub dev: Option<PluginRelease>,
+    pub latest: PluginRelease,
+    pub history: Vec<PluginVersionHistory>,
+}
+
+/// Fetches the wrapper object containing both dev and latest releases
+fn fetch_releases() -> Result<PluginApiResponse, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -36,63 +49,40 @@ fn fetch_releases(token: &str) -> Result<Vec<PluginRelease>, String> {
 
     client
         .get(RELEASES_API_URL)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "controller-pack-manager")
-        .bearer_auth(token)
         .send()
-        .map_err(|error| format!("unable to fetch releases list: {}", error))?
-        .error_for_status()
         .map_err(|error| format!("releases list request failed: {}", error))?
-        .json::<Vec<PluginRelease>>()
+        .json::<PluginApiResponse>()
         .map_err(|error| format!("unable to parse releases list payload: {}", error))
 }
 
-fn find_release_asset(release: &PluginRelease) -> Option<&crate::github_http::GitHubReleaseAsset> {
+fn find_release_asset(release: &PluginRelease) -> Option<&Artifact> {
     release
-        .assets
+        .artifacts
         .iter()
         .find(|asset| asset.name.eq_ignore_ascii_case(PLUGIN_ASSET_NAME))
 }
 
-fn select_release(token: &str, dev_releases_opt_in: bool) -> Result<PluginRelease, String> {
-    if dev_releases_opt_in {
-        let releases = fetch_releases(token)?;
-        return releases
-            .into_iter()
-            .find(|release| {
-                (release.draft || release.prerelease) && find_release_asset(release).is_some()
-            })
-            .ok_or_else(|| {
-                format!(
-                    "no dev release (draft/prerelease) with asset '{}' was found",
-                    PLUGIN_ASSET_NAME
-                )
-            });
+fn select_release(dev_releases_opt_in: bool) -> Result<PluginRelease, String> {
+    let response = fetch_releases()?;
+
+    let release = if dev_releases_opt_in {
+        response.dev.ok_or_else(|| "no dev release is currently available".to_string())?
+    } else {
+        response.latest
+    };
+
+    if find_release_asset(&release).is_some() {
+        Ok(release)
+    } else {
+        Err(format!(
+            "release '{}' does not contain required asset '{}'",
+            release.title, PLUGIN_ASSET_NAME
+        ))
     }
+}
 
-    let stable_release = fetch_latest_release(LATEST_RELEASE_API_URL, Some(token))?;
-    let stable_asset = stable_release
-        .assets
-        .iter()
-        .find(|asset| asset.name.eq_ignore_ascii_case(PLUGIN_ASSET_NAME))
-        .ok_or_else(|| {
-            format!(
-                "release does not contain required asset '{}'",
-                PLUGIN_ASSET_NAME
-            )
-        })?;
-
-    Ok(PluginRelease {
-        tag_name: stable_release.tag_name,
-        draft: false,
-        prerelease: false,
-        body: stable_release.body,
-        assets: vec![crate::github_http::GitHubReleaseAsset {
-            url: stable_asset.url.clone(),
-            name: PLUGIN_ASSET_NAME.to_string(),
-            browser_download_url: stable_asset.browser_download_url.clone(),
-        }],
-    })
+pub fn get_plugin_releases() -> Result<PluginApiResponse, String> {
+    fetch_releases()
 }
 
 pub fn get_plugin_dev_releases_opt_in() -> Result<bool, String> {
@@ -103,35 +93,99 @@ pub fn set_plugin_dev_releases_opt_in(opt_in: bool) -> Result<(), String> {
     update_config(|config| {
         config.plugin_dev_releases_opt_in = opt_in;
     })
-    .map(|_| ())
+        .map(|_| ())
 }
 
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
-    Ok(read_config_or_default()?.installed_plugin_version)
+    let config = read_config_or_default()?;
+
+    // 1. Fast Path: Check config
+    if let Some(version) = config.installed_plugin_version {
+        return Ok(Some(version));
+    }
+
+    // 2. Identify Path
+    let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
+    let plugin_path = PathBuf::from(&app_data)
+        .join("EuroScope/LIXX/Plugins")
+        .join(PLUGIN_FOLDER_NAME)
+        .join(PLUGIN_ASSET_NAME);
+
+    if !plugin_path.exists() {
+        return Ok(None);
+    }
+
+    // 3. Hash Path: Match against full history
+    let calculated_digest = calculate_file_sha256(&plugin_path)?;
+    let releases = fetch_releases()?;
+
+    // Check history first (includes older versions)
+    if let Some(entry) = releases.history.iter().find(|h| h.digest == calculated_digest) {
+        return Ok(Some(entry.name.clone()));
+    }
+
+    // Fallback: Check 'latest' and 'dev' specifically if they aren't in history
+    let mut check_list = vec![&releases.latest];
+    if let Some(dev) = &releases.dev { check_list.push(dev); }
+
+    for release in check_list {
+        if let Some(asset) = find_release_asset(release) {
+            if asset.digest.as_ref() == Some(&calculated_digest) {
+                return Ok(Some(release.title.clone()));
+            }
+        }
+    }
+
+    Ok(Some("installed (unknown version)".to_string()))
 }
+
 
 pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String> {
     let config = read_config_or_default()?;
-    if !config.plugin_dev_releases_opt_in {
+    println!("[Plugin] Checking for available updates...");
+    println!("[Plugin] Installed version: {:?}", config.installed_plugin_version);
+    println!("[Plugin] Installed digest: {:?}", config.installed_plugin_digest);
+
+    // We fetch current availability regardless of opt-in to check version
+    let release = select_release(config.plugin_dev_releases_opt_in)?;
+
+    if release.title.trim().is_empty() {
+        println!("[Plugin] Release title is empty, no update");
         return Ok(None);
     }
 
-    let token = require_private_repo_token()?;
-    let release = select_release(&token, true)?;
+    let latest_digest = find_release_asset(&release).and_then(|a| a.digest.clone());
+    println!("[Plugin] Latest version: {}", release.title);
+    println!("[Plugin] Latest digest: {:?}", latest_digest);
 
-    if release.tag_name.trim().is_empty() {
-        return Ok(None);
+    // Compare by digest if available (more reliable)
+    if let Some(latest) = latest_digest {
+        if let Some(installed) = config.installed_plugin_digest {
+            if installed.trim() == latest.trim() {
+                println!("[Plugin] Digests match - no update needed");
+                return Ok(None); // Same digest, no update needed
+            }
+            println!("[Plugin] Digests differ - update available");
+        } else {
+            println!("[Plugin] No installed digest but digest available - update available");
+        }
+        // Different digest or no stored digest, update available
+        return Ok(Some(release.title.trim().to_string()));
     }
 
-    let latest_version = release.tag_name.trim().to_string();
+    // Fallback to version string comparison if digest not available
+    let latest_version = release.title.trim().to_string();
+    println!("[Plugin] Digest not available, falling back to version comparison");
     if config
         .installed_plugin_version
         .as_deref()
         .is_some_and(|installed| installed.trim() == latest_version)
     {
+        println!("[Plugin] Versions match - no update needed");
         return Ok(None);
     }
 
+    println!("[Plugin] Update available: {}", latest_version);
     Ok(Some(latest_version))
 }
 
@@ -141,6 +195,14 @@ fn require_private_repo_token() -> Result<String, String> {
     })
 }
 
+fn calculate_file_sha256(path: &Path) -> Result<String, String> {
+    let data = fs::read(path).map_err(|e| format!("unable to read file: {}", e))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    let digest = hasher.finalize();
+    Ok(format!("sha256:{:x}", digest))
+}
+
 fn download_latest_plugin_asset(
     download_folder: &Path,
     release: &PluginRelease,
@@ -148,32 +210,18 @@ fn download_latest_plugin_asset(
 ) -> Result<PathBuf, String> {
     clear_directory(download_folder)?;
 
-    let dll_asset = find_release_asset(release).ok_or_else(|| {
+    let asset = find_release_asset(release).ok_or_else(|| {
         format!(
             "release does not contain required asset '{}'",
             PLUGIN_ASSET_NAME
         )
     })?;
 
-    let dll_bytes = if !dll_asset.url.trim().is_empty() {
-        download_release_asset_bytes(&dll_asset.url, Some(token)).or_else(|_| {
-            if dll_asset.browser_download_url.trim().is_empty() {
-                Err(format!(
-                    "release does not provide a valid download url for '{}'",
-                    PLUGIN_ASSET_NAME
-                ))
-            } else {
-                download_bytes(&dll_asset.browser_download_url, Some(token))
-            }
-        })?
-    } else if !dll_asset.browser_download_url.trim().is_empty() {
-        download_bytes(&dll_asset.browser_download_url, Some(token))?
-    } else {
-        return Err(format!(
-            "release does not provide a valid download url for '{}'",
-            PLUGIN_ASSET_NAME
-        ));
-    };
+    // Construct the URL based on the new pattern: api/plugin/{release_id}/{filename}
+    let download_url = format!("{}/{}/{}", RELEASES_API_URL, release.id, asset.name);
+
+    let dll_bytes = download_bytes(&download_url, Some(token))?;
+
     let downloaded_dll_path = download_folder.join(PLUGIN_ASSET_NAME);
 
     fs::write(&downloaded_dll_path, dll_bytes).map_err(|error| {
@@ -188,22 +236,22 @@ fn download_latest_plugin_asset(
 }
 
 pub fn run_get_latest_plugin_changelog() -> Result<String, String> {
-    let token = require_private_repo_token()?;
     let config = read_config_or_default()?;
-    let release = select_release(&token, config.plugin_dev_releases_opt_in)?;
-    Ok(release.body)
+    let release = select_release(config.plugin_dev_releases_opt_in)?;
+    println!("{:?}", release);
+    Ok(release.changelog)
 }
 
 pub fn run_update_plugin_version() -> Result<String, String> {
     let config = read_config_or_default()?;
-
     let token = require_private_repo_token()?;
     let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
 
     let base_folder = PathBuf::from(&app_data).join("controller-pack-manager");
     let download_folder = base_folder.join("download-plugin");
 
-    let release = select_release(&token, config.plugin_dev_releases_opt_in)?;
+    let release = select_release(config.plugin_dev_releases_opt_in)?;
+    println!("[Plugin] Downloading version: {}", release.title);
     let downloaded_dll_path = download_latest_plugin_asset(&download_folder, &release, &token)?;
 
     let plugins_root = PathBuf::from(&app_data)
@@ -213,48 +261,36 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     let plugin_target_directory = plugins_root.join(PLUGIN_FOLDER_NAME);
     let plugin_target_dll_path = plugin_target_directory.join(PLUGIN_ASSET_NAME);
 
+    println!("[Plugin] Installing to: {}", plugin_target_dll_path.display());
+
     fs::create_dir_all(&plugins_root).map_err(|error| {
-        format!(
-            "unable to create plugins directory '{}': {}",
-            plugins_root.display(),
-            error
-        )
+        format!("unable to create plugins directory '{}': {}", plugins_root.display(), error)
     })?;
 
     fs::create_dir_all(&plugin_target_directory).map_err(|error| {
-        format!(
-            "unable to create plugin directory '{}': {}",
-            plugin_target_directory.display(),
-            error
-        )
+        format!("unable to create plugin directory '{}': {}", plugin_target_directory.display(), error)
     })?;
 
     fs::copy(&downloaded_dll_path, &plugin_target_dll_path).map_err(|error| {
-        format!(
-            "unable to copy '{}' to '{}': {}",
-            downloaded_dll_path.display(),
-            plugin_target_dll_path.display(),
-            error
-        )
+        format!("unable to copy '{}' to '{}': {}", downloaded_dll_path.display(), plugin_target_dll_path.display(), error)
     })?;
 
-    fs::remove_dir_all(&download_folder).map_err(|error| {
-        format!(
-            "unable to remove plugin download folder '{}': {}",
-            download_folder.display(),
-            error
-        )
-    })?;
+    let _ = fs::remove_dir_all(&download_folder);
 
-    let installed_version = if release.tag_name.trim().is_empty() {
+    let installed_version = if release.title.trim().is_empty() {
         None
     } else {
-        Some(release.tag_name.clone())
+        Some(release.title.clone())
     };
+
+    let installed_digest = find_release_asset(&release).and_then(|a| a.digest.clone());
+    println!("[Plugin] Storing version: {:?}, digest: {:?}", installed_version, installed_digest);
 
     update_config(|stored_config| {
         stored_config.installed_plugin_version = installed_version.clone();
-    })?;
+        stored_config.installed_plugin_digest = installed_digest.clone();
+    }).map_err(|e| format!("failed to update config: {}", e))?;
 
-    Ok(release.body)
+    println!("[Plugin] Update completed successfully!");
+    Ok(release.title)
 }

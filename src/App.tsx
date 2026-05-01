@@ -6,7 +6,7 @@ import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
 import { ListsSection } from "./components";
 import type { ListsSectionScreenConfig } from "./components/ListsSection";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists";
@@ -33,7 +33,10 @@ function App(
         profiles,
         hoppieCode,
         listConfigs,
-        startupError
+        startupError,
+        installedAiracVersion: initialInstalled,
+        latestAiracVersion: initialLatest,
+        newAiracVersionAvailable: initialAvailable,
     }: AppProps
 ) {
     const [activeSection, setActiveSection] = useState<DashboardSection>("sector-file");
@@ -49,6 +52,11 @@ function App(
         getCurrentLayout: () => ListConfig[] | null;
         getCurrentScreenConfig: () => ListsSectionScreenConfig;
     }>(null);
+    const [airacState, setAiracState] = useState({
+        installed: initialInstalled,
+        latest: initialLatest,
+        available: initialAvailable
+    });
 
     const refreshProfiles = async () => {
         try {
@@ -349,27 +357,44 @@ function App(
         return appProfiles.find((profile) => profile.name === selectedProfileName) ?? null;
     }, [appProfiles, selectedProfileName]);
 
+    const refreshAiracState = useCallback(async () => {
+        try {
+            const [installed, latest, available] = await Promise.all([
+                invoke<string | null>("get_installed_airac_version"),
+                invoke<string | null>("get_latest_airac_version"),
+                invoke<boolean | null>("check_airac_update_available"),
+            ]);
+
+            setAiracState({
+                installed,
+                latest,
+                available
+            });
+        } catch (error) {
+            console.error("Failed to refresh AIRAC state:", error);
+        }
+    }, []);
+
     const renderSection = () => {
         if (activeSection === "sector-file") {
             return (
                 <AiracSection
-                    installedAiracVersion={installedAiracVersion}
-                    latestAiracVersion={latestAiracVersion}
-                    newAiracVersionAvailable={newAiracVersionAvailable}
+                    installedAiracVersion={airacState.installed}
+                    latestAiracVersion={airacState.latest}
+                    newAiracVersionAvailable={airacState.available}
                     startupError={startupError}
+                    onUpdateComplete={refreshAiracState}
                 />
             );
         }
 
-        if (activeSection === "plugin") {
-            return (
-                <PluginSection
-                    installedAiracVersion={installedAiracVersion}
-                    installedPluginVersion={installedPluginVersion}
-                    startupError={startupError}
-                />
-            );
-        }
+         if (activeSection === "plugin") {
+             return (
+                 <PluginSection
+                     startupError={startupError}
+                 />
+             );
+         }
 
         if (activeSection === "profiles") {
             return (
@@ -451,14 +476,14 @@ function App(
                             )}
                             {activeSection === "sector-file" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    AIRAC {installedAiracVersion ?? "unknown"}
+                                    AIRAC {airacState.installed ?? "unknown"}
                                 </span>
                             )}
                             {activeSection === "plugin" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
                                     {installedPluginVersion
                                         ? `${installedPluginVersion}`
-                                        : `AIRAC ${installedAiracVersion ?? "unknown"}`}
+                                        : `AIRAC ${airacState.installed ?? "unknown"}`}
                                 </span>
                             )}
                         </div>

@@ -36,7 +36,7 @@ const normalizeError = (error: unknown): string => {
   return String(error);
 };
 
-export const useAiracUpdate = () => {
+export const useAiracUpdate = (onUpdateComplete?: () => void) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isImportingSectorZip, setIsImportingSectorZip] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -176,6 +176,7 @@ export const useAiracUpdate = () => {
       setChangelog(normalized);
       setSectorImportSuccess(null);
       setUpdateSuccess(true);
+      onUpdateComplete?.();
 
       airacCache.changelog = normalized;
       airacCache.lastCheckedAtMs = checkedAt;

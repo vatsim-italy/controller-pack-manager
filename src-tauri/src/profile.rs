@@ -40,7 +40,7 @@ impl Profile {
                 Self::parse_recent_files_info(&mut profile, &parts);
             } else if parts[0] == "Settings" {
                 if let Err(error) = Self::parse_settings_info(&mut profile, &parts) {
-                    dbg!(
+                    eprintln!(
                         "warning: failed to parse Settings line in profile '{}': {}",
                         file_name,
                         error
@@ -73,9 +73,11 @@ impl Profile {
             return Ok(());
         }
 
-        let list_id = parts[1]
-            .strip_prefix("Settingsfile")
-            .ok_or("failed to parse Settings statement in profile".to_string())?;
+        // Only process Settings lines that have the "Settingsfile" prefix
+        // Other Settings lines (like AselKey, FreqKey, etc.) are ignored silently
+        let Some(list_id) = parts[1].strip_prefix("Settingsfile") else {
+            return Ok(());
+        };
 
         let config_file_path = parts[2..].join(" ");
 

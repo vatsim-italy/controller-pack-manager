@@ -13,6 +13,8 @@ pub struct ControllerPackManagerConfig {
     pub plugin_dev_releases_opt_in: bool,
     #[serde(default)]
     pub installed_plugin_version: Option<String>,
+    #[serde(default)]
+    pub installed_plugin_digest: Option<String>,
 }
 
 fn config_dir_path() -> Result<PathBuf, String> {

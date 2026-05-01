@@ -1,41 +1,16 @@
-import { isValidElement, ReactNode, useState } from "react";
+import { ReactNode, isValidElement } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { usePluginUpdate } from "../hooks/usePluginUpdate";
 
-const IconEyeOpen = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-        <circle cx="12" cy="12" r="3" />
-    </svg>
-);
-
-const IconEyeClosed = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-        <path d="M3 3l18 18" />
-        <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2" />
-        <path d="M9.9 5.1A11.3 11.3 0 0 1 12 5c6.5 0 10 7 10 7a17.4 17.4 0 0 1-4.2 4.9" />
-        <path d="M6.2 6.3A17.1 17.1 0 0 0 2 12s3.5 7 10 7c1.5 0 2.9-.4 4.1-1" />
-    </svg>
-);
 
 interface PluginSectionProps {
-    installedAiracVersion: string | null;
-    installedPluginVersion: string | null;
     startupError: string | null;
 }
 
-export const PluginSection = ({
-    installedAiracVersion,
-    installedPluginVersion,
-    startupError,
-}: PluginSectionProps) => {
-    const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
-    const [isTokenVisible, setIsTokenVisible] = useState(false);
-
+export const PluginSection = ({ startupError }: PluginSectionProps) => {
     const {
         isUpdating,
-        isSavingToken,
         updateError,
         updateSuccess,
         updatePlugin,
@@ -46,24 +21,40 @@ export const PluginSection = ({
         availableVersion,
         hasGithubToken,
         isDevReleasesOptedIn,
-        tokenInput,
-        setTokenInput,
-        saveGithubToken,
-        clearGithubToken,
         toggleDevReleasesOptIn,
         lastCheckedAt,
+        installedVersion,
+        isLoadingSettings,
     } = usePluginUpdate();
 
     const hasUpdate = Boolean(availableVersion);
-    const currentInstalledVersionLabel = installedPluginVersion
-        ? `${installedPluginVersion}`
-        : `AIRAC ${installedAiracVersion ?? "unknown"}`;
+    const currentInstalledVersionLabel = installedVersion
+        ? installedVersion === "installed"
+            ? "Installed (version unknown)"
+            : `${installedVersion}`
+        : "Not Installed";
+
+    // Debug logging
+    console.log("PluginSection render", {
+        availableVersion,
+        hasUpdate,
+        installedVersion,
+        hasGithubToken,
+        isDevReleasesOptedIn,
+        isLoadingSettings,
+    });
 
     const cardTitle = startupError
-        ? `Update Status Unavailable: ${currentInstalledVersionLabel}`
-        : hasUpdate
-            ? `Update Available: ${availableVersion}`
-            : `Up to Date: ${currentInstalledVersionLabel}`;
+        ? `Update Status Unavailable`
+        : isLoadingSettings
+            ? `Loading Plugin Status...`
+            : hasUpdate
+                ? `Update Available: ${availableVersion}`
+                : installedVersion && installedVersion !== "installed" && !installedVersion.includes("unknown")
+                    ? `Up to Date: ${installedVersion}`
+                    : installedVersion
+                        ? `Plugin Installed`
+                        : `Plugin Not Installed`;
 
     const formattedLastChecked = lastCheckedAt
         ? lastCheckedAt.toLocaleString([], {
@@ -99,6 +90,8 @@ export const PluginSection = ({
                             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-secondary-600 bg-secondary-700">
                                 {startupError ? (
                                     <span className="text-2xl text-accent-danger">⚠</span>
+                                ) : !installedVersion ? (
+                                    <span className="text-2xl text-accent-warning">↓</span>
                                 ) : hasUpdate ? (
                                     <span className="text-2xl text-accent-warning">↻</span>
                                 ) : (
@@ -135,20 +128,11 @@ export const PluginSection = ({
                             </div>
 
                             <button
-                                type="button"
-                                className="btn-secondary btn-small"
-                                onClick={() => setIsTokenModalOpen(true)}
-                            >
-                                {hasGithubToken ? "Manage Token" : "Set Access Token"}
-                            </button>
-
-                            <button
                                 className="btn-primary px-5 py-2.5 text-sm font-bold"
                                 onClick={updatePlugin}
-                                disabled={isUpdating || startupError !== null || !hasGithubToken || !isDevReleasesOptedIn}
+                                disabled={isUpdating || startupError !== null || !isDevReleasesOptedIn}
                             >
-                                {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
-                                {isUpdating ? "Updating..." : hasUpdate ? "Install Update" : "Check for Updates"}
+                                {isUpdating ? "Updating..." : hasUpdate ? "Install Update" : installedVersion ? "Check for Updates" : "Install Plugin"}
                             </button>
                         </div>
                     </div>
@@ -214,10 +198,10 @@ export const PluginSection = ({
                     <div className="overflow-hidden rounded-xl border border-secondary-600 bg-dark-header shadow-sm">
                         <div className="flex items-center justify-between border-b border-secondary-600 bg-secondary-700/50 p-6">
                             <span className="font-bold uppercase tracking-tight text-white">
-                                Version {currentInstalledVersionLabel}
+                                {hasUpdate ? `Upcoming: ${availableVersion}` : `Current: ${currentInstalledVersionLabel}`}
                             </span>
                             <span className="text-xs font-medium text-secondary-500">
-                                Latest release notes
+                                {hasUpdate ? "New Release Notes" : "Installed Version Notes"}
                             </span>
                         </div>
 
@@ -270,65 +254,7 @@ export const PluginSection = ({
                 </section>
             </div>
 
-            {isTokenModalOpen && (
-                <div className="fixed inset-0 z-40 flex items-center justify-center bg-dark-header/80 px-4">
-                    <div className="w-full max-w-xl rounded-xl border border-secondary-600 bg-dark-header shadow-lg">
-                        <div className="flex items-center justify-between border-b border-secondary-600 px-5 py-4">
-                            <h3 className="text-base font-semibold text-white">GitHub Access Token</h3>
-                            <button
-                                type="button"
-                                className="btn-secondary btn-small"
-                                onClick={() => setIsTokenModalOpen(false)}
-                            >
-                                Close
-                            </button>
-                        </div>
-
-                        <div className="space-y-4 px-5 py-5">
-                            <p className="text-sm text-secondary-500">
-                                Provide a token with repository read access to download plugin releases.
-                            </p>
-
-                            <div className="relative">
-                                <input
-                                    type={isTokenVisible ? "text" : "password"}
-                                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                                    value={tokenInput}
-                                    onChange={(event) => setTokenInput(event.target.value)}
-                                    className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 pr-10 text-sm text-white outline-none focus:border-primary-600"
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-100 transition-colors hover:text-white"
-                                    onClick={() => setIsTokenVisible((current) => !current)}
-                                    aria-label={isTokenVisible ? "Hide token" : "Show token"}
-                                >
-                                    {isTokenVisible ? <IconEyeClosed /> : <IconEyeOpen />}
-                                </button>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-2">
-                                <button
-                                    type="button"
-                                    className="btn-small rounded-xl bg-accent-danger px-4 py-2 font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                                    disabled={isSavingToken}
-                                    onClick={() => void clearGithubToken()}
-                                >
-                                    Clear Token
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-primary px-4 py-2 text-sm font-semibold"
-                                    disabled={isSavingToken}
-                                    onClick={() => void saveGithubToken()}
-                                >
-                                    Save Token
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };
+

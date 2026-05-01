@@ -470,7 +470,7 @@ pub fn run_update_airac_version(
     euroscope_config_dir: String,
     existing_profiles: Vec<Profile>,
     hoppie_code: String,
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let download_folder = app_data_work_dir()?.join("download");
     let imported_sector_folder = imported_sector_files_dir()?;
 
@@ -536,5 +536,5 @@ pub fn run_update_airac_version(
         })?;
     }
 
-    Ok(changelog)
+    Ok((changelog, latest_version))
 }

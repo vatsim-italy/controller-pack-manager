@@ -7,6 +7,7 @@ interface AiracSectionProps {
     latestAiracVersion: string | null;
     newAiracVersionAvailable: boolean | null;
     startupError: string | null;
+    onUpdateComplete?: () => void;
 }
 
 export const AiracSection = ({
@@ -14,6 +15,7 @@ export const AiracSection = ({
     latestAiracVersion,
     newAiracVersionAvailable,
     startupError,
+    onUpdateComplete
 }: AiracSectionProps) => {
     const {
         isUpdating,
@@ -31,18 +33,21 @@ export const AiracSection = ({
         changelog,
         isLoadingChangelog,
         lastCheckedAt,
-    } = useAiracUpdate();
+    } = useAiracUpdate(onUpdateComplete);
 
-    const hasUpdate = newAiracVersionAvailable === true;
+    const hasUpdate = newAiracVersionAvailable === true && !updateSuccess;
+    const isUpToDate = installedAiracVersion === latestAiracVersion && latestAiracVersion !== null;
     const requiresSectorImport = hasUpdate && !hasImportedSectorFiles;
     const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "unknown";
     const cardTitle = startupError
         ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
-        : requiresSectorImport
-            ? `Update Ready: Import Sector Files for AIRAC ${targetAiracVersion}`
-            : hasUpdate
-                ? `Update Available: AIRAC ${targetAiracVersion}`
-                : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+        : (updateSuccess || isUpToDate) // If hook succeeded OR versions match
+            ? `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`
+            : requiresSectorImport
+                ? `Update Ready: Import Sector Files for AIRAC ${targetAiracVersion}`
+                : hasUpdate
+                    ? `Update Available: AIRAC ${targetAiracVersion}`
+                    : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
 
     const formattedLastChecked = lastCheckedAt
         ? lastCheckedAt.toLocaleString([], {

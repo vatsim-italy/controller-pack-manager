@@ -32,6 +32,7 @@ pub fn run() {
             get_latest_airac_version,
             update_plugin_version,
             get_latest_plugin_changelog,
+            fetch_plugin_releases,
             set_github_access_token,
             clear_github_access_token,
             has_github_access_token,

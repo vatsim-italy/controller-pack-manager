@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+type PluginRelease = {
+  id: number;
+  title: string;
+  changelog: string;
+  artifacts: Array<{
+    id: number;
+    name: string;
+  }>;
+};
+
+type PluginApiResponse = {
+  dev: PluginRelease;
+  latest: PluginRelease;
+};
+
 type PluginCache = {
   key: string | null;
   fetched: boolean;
-  changelog: string | null;
-  changelogError: string | null;
-  availableVersion: string | null;
+  releases: PluginApiResponse | null;
+  fetchError: string | null;
   lastCheckedAtMs: number | null;
   inFlightKey: string | null;
   inFlight: Promise<void> | null;
@@ -15,9 +29,8 @@ type PluginCache = {
 const pluginCache: PluginCache = {
   key: null,
   fetched: false,
-  changelog: null,
-  changelogError: null,
-  availableVersion: null,
+  releases: null,
+  fetchError: null,
   lastCheckedAtMs: null,
   inFlightKey: null,
   inFlight: null,
@@ -42,103 +55,70 @@ const normalizeError = (error: unknown): string => {
   return String(error);
 };
 
-const normalizeChangelog = (value: string | null) => {
-  if (!value || value.trim().length === 0) {
-    return "No changelog notes were provided for this release.";
-  }
-
-  return value;
-};
-
 export const usePluginUpdate = () => {
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isSavingToken, setIsSavingToken] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
-  const [changelog, setChangelog] = useState<string | null>(pluginCache.changelog);
-  const [isLoadingChangelog, setIsLoadingChangelog] = useState(false);
-  const [changelogError, setChangelogError] = useState<string | null>(pluginCache.changelogError);
-  const [availableVersion, setAvailableVersion] = useState<string | null>(pluginCache.availableVersion);
+  const [releases, setReleases] = useState<PluginApiResponse | null>(pluginCache.releases);
+  const [isLoadingReleases, setIsLoadingReleases] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(pluginCache.fetchError);
   const [hasGithubToken, setHasGithubToken] = useState(false);
   const [isDevReleasesOptedIn, setIsDevReleasesOptedIn] = useState(false);
-  const [tokenInput, setTokenInput] = useState("");
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(readPluginCachedLastChecked());
   const [settingsReady, setSettingsReady] = useState(false);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   const buildCacheKey = useCallback((tokenAvailable: boolean, devOptIn: boolean) => {
     return `${tokenAvailable ? "1" : "0"}:${devOptIn ? "1" : "0"}`;
   }, []);
 
-  const fetchLatestChangelogWithFlags = useCallback(async (tokenAvailable: boolean, devOptIn: boolean, force = false) => {
+  const fetchReleasesWithFlags = useCallback(async (tokenAvailable: boolean, devOptIn: boolean, force = false) => {
     const cacheKey = buildCacheKey(tokenAvailable, devOptIn);
+
     if (!force && pluginCache.fetched && pluginCache.key === cacheKey) {
-      setChangelog(pluginCache.changelog);
-      setAvailableVersion(pluginCache.availableVersion);
-      setChangelogError(pluginCache.changelogError);
+      setReleases(pluginCache.releases);
+      setFetchError(pluginCache.fetchError);
       setLastCheckedAt(readPluginCachedLastChecked());
       return;
     }
 
     if (!force && pluginCache.inFlight && pluginCache.inFlightKey === cacheKey) {
-      setIsLoadingChangelog(true);
+      setIsLoadingReleases(true);
       await pluginCache.inFlight;
-      setChangelog(pluginCache.changelog);
-      setAvailableVersion(pluginCache.availableVersion);
-      setChangelogError(pluginCache.changelogError);
+      setReleases(pluginCache.releases);
+      setFetchError(pluginCache.fetchError);
       setLastCheckedAt(readPluginCachedLastChecked());
-      setIsLoadingChangelog(false);
+      setIsLoadingReleases(false);
       return;
     }
 
     if (!tokenAvailable) {
-      setChangelog(null);
-      setAvailableVersion(null);
-      setChangelogError("Provide a GitHub access token to access plugin releases.");
+      setReleases(null);
+      setFetchError("Provide a GitHub access token to access plugin releases.");
       const checkedAt = Date.now();
       setLastCheckedAt(new Date(checkedAt));
 
       pluginCache.key = cacheKey;
       pluginCache.fetched = true;
-      pluginCache.changelog = null;
-      pluginCache.availableVersion = null;
-      pluginCache.changelogError = "Provide a GitHub access token to access plugin releases.";
+      pluginCache.releases = null;
+      pluginCache.fetchError = "Provide a GitHub access token to access plugin releases.";
       pluginCache.lastCheckedAtMs = checkedAt;
       return;
     }
 
-    if (!devOptIn) {
-      setChangelog(null);
-      setAvailableVersion(null);
-      setChangelogError(null);
-      const checkedAt = Date.now();
-      setLastCheckedAt(new Date(checkedAt));
-
-      pluginCache.key = cacheKey;
-      pluginCache.fetched = true;
-      pluginCache.changelog = null;
-      pluginCache.availableVersion = null;
-      pluginCache.changelogError = null;
-      pluginCache.lastCheckedAtMs = checkedAt;
-      return;
-    }
-
-    setIsLoadingChangelog(true);
-    setChangelogError(null);
+    setIsLoadingReleases(true);
+    setFetchError(null);
 
     const request = (async () => {
       try {
-        const [latestChangelog, latestInstallableVersion] = await Promise.all([
-          invoke<string>("get_latest_plugin_changelog"),
-          invoke<string | null>("get_latest_plugin_installable_version"),
-        ]);
-        const normalized = normalizeChangelog(latestChangelog);
+        const releasesData = await invoke<PluginApiResponse>("fetch_plugin_releases");
         const checkedAt = Date.now();
 
         pluginCache.key = cacheKey;
         pluginCache.fetched = true;
-        pluginCache.changelog = normalized;
-        pluginCache.availableVersion = latestInstallableVersion;
-        pluginCache.changelogError = null;
+        pluginCache.releases = releasesData;
+        pluginCache.fetchError = null;
         pluginCache.lastCheckedAtMs = checkedAt;
       } catch (error) {
         const errorMessage = normalizeError(error);
@@ -146,9 +126,8 @@ export const usePluginUpdate = () => {
 
         pluginCache.key = cacheKey;
         pluginCache.fetched = true;
-        pluginCache.changelog = null;
-        pluginCache.availableVersion = null;
-        pluginCache.changelogError = errorMessage;
+        pluginCache.releases = null;
+        pluginCache.fetchError = errorMessage;
         pluginCache.lastCheckedAtMs = checkedAt;
       }
     })();
@@ -157,36 +136,47 @@ export const usePluginUpdate = () => {
     pluginCache.inFlight = request;
     try {
       await request;
-      setChangelog(pluginCache.changelog);
-      setAvailableVersion(pluginCache.availableVersion);
-      setChangelogError(pluginCache.changelogError);
+      setReleases(pluginCache.releases);
+      setFetchError(pluginCache.fetchError);
       setLastCheckedAt(readPluginCachedLastChecked());
     } finally {
       pluginCache.inFlight = null;
       pluginCache.inFlightKey = null;
-      setIsLoadingChangelog(false);
+      setIsLoadingReleases(false);
     }
   }, [buildCacheKey]);
 
   const refreshSettings = useCallback(async () => {
-    const [tokenAvailable, devOptIn] = await Promise.all([
-      invoke<boolean>("has_github_access_token"),
-      invoke<boolean>("is_plugin_dev_releases_opted_in"),
-    ]);
+    try {
+      const [tokenAvailable, devOptIn, installedVer] = await Promise.all([
+        invoke<boolean>("has_github_access_token"),
+        invoke<boolean>("is_plugin_dev_releases_opted_in"),
+        invoke<string | null>("get_installed_plugin_version"),
+      ]);
 
-    setHasGithubToken(tokenAvailable);
-    setIsDevReleasesOptedIn(devOptIn);
-    return { tokenAvailable, devOptIn };
+      setHasGithubToken(tokenAvailable);
+      setIsDevReleasesOptedIn(devOptIn);
+      setInstalledVersion(installedVer ?? null);
+      return { tokenAvailable, devOptIn };
+    } catch (error) {
+      console.error("Failed to refresh settings:", error);
+      throw error;
+    }
   }, []);
 
-  const fetchLatestChangelog = useCallback(async () => {
-    await fetchLatestChangelogWithFlags(hasGithubToken, isDevReleasesOptedIn);
-  }, [fetchLatestChangelogWithFlags, hasGithubToken, isDevReleasesOptedIn]);
+  const fetchLatestReleases = useCallback(async () => {
+    await fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn);
+  }, [fetchReleasesWithFlags, hasGithubToken, isDevReleasesOptedIn]);
 
   useEffect(() => {
     const loadSettings = async () => {
-      await refreshSettings();
-      setSettingsReady(true);
+      setIsLoadingSettings(true);
+      try {
+        await refreshSettings();
+      } finally {
+        setIsLoadingSettings(false);
+        setSettingsReady(true);
+      }
     };
 
     void loadSettings();
@@ -197,51 +187,8 @@ export const usePluginUpdate = () => {
       return;
     }
 
-    void fetchLatestChangelog();
-  }, [fetchLatestChangelog, settingsReady]);
-
-  const saveGithubToken = async () => {
-    const normalizedToken = tokenInput.trim();
-    if (!normalizedToken) {
-      setUpdateError("GitHub token cannot be empty.");
-      return;
-    }
-
-    setIsSavingToken(true);
-    setUpdateError(null);
-
-    try {
-      await invoke("set_github_access_token", { token: normalizedToken });
-      setTokenInput("");
-      const { tokenAvailable, devOptIn } = await refreshSettings();
-      await fetchLatestChangelogWithFlags(tokenAvailable, devOptIn, true);
-    } catch (error) {
-      setUpdateError(normalizeError(error));
-    } finally {
-      setIsSavingToken(false);
-    }
-  };
-
-  const clearGithubToken = async () => {
-    setIsSavingToken(true);
-    setUpdateError(null);
-
-    try {
-      await invoke("clear_github_access_token");
-      await refreshSettings();
-      setChangelog(null);
-      setAvailableVersion(null);
-      setChangelogError("Provide a GitHub access token to access plugin releases.");
-      pluginCache.fetched = false;
-      pluginCache.key = null;
-      pluginCache.inFlight = null;
-      pluginCache.inFlightKey = null;
-    } catch (error) {
-      setUpdateError(normalizeError(error));
-    } finally {
-      setIsSavingToken(false);
-    }
-  };
+    void fetchLatestReleases();
+  }, [fetchLatestReleases, settingsReady]);
 
   const toggleDevReleasesOptIn = async (optIn: boolean) => {
     setUpdateError(null);
@@ -251,7 +198,7 @@ export const usePluginUpdate = () => {
       setIsDevReleasesOptedIn(optIn);
       setUpdateSuccess(false);
 
-      await fetchLatestChangelogWithFlags(hasGithubToken, optIn, true);
+      await fetchReleasesWithFlags(hasGithubToken, optIn, true);
     } catch (error) {
       setUpdateError(normalizeError(error));
     }
@@ -268,22 +215,15 @@ export const usePluginUpdate = () => {
       return;
     }
 
-    if (!availableVersion) {
-      setUpdateError(null);
-      await fetchLatestChangelogWithFlags(hasGithubToken, isDevReleasesOptedIn, true);
-      return;
-    }
-
     setIsUpdating(true);
     setUpdateError(null);
     setUpdateSuccess(false);
 
     try {
-      const latestChangelog = await invoke<string | null>("update_plugin_version");
-      setChangelog(normalizeChangelog(latestChangelog));
+      const latestVersion = await invoke<string>("update_plugin_version");
       setUpdateSuccess(true);
-      setChangelogError(null);
-      await fetchLatestChangelogWithFlags(hasGithubToken, isDevReleasesOptedIn, true);
+      setInstalledVersion(latestVersion);
+      await fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn, true);
 
       const timer = setTimeout(() => setUpdateSuccess(false), 3000);
       return () => clearTimeout(timer);
@@ -297,24 +237,38 @@ export const usePluginUpdate = () => {
 
   const clearError = () => setUpdateError(null);
 
+  // Get the current release based on dev opt-in
+  const currentRelease = releases
+    ? (isDevReleasesOptedIn ? releases.dev : releases.latest)
+    : null;
+
+  // Determine if an update is available
+  const hasUpdate = Boolean(
+    currentRelease &&
+    installedVersion &&
+    currentRelease.title.trim() !== installedVersion.trim()
+  );
+
+  // Return the available version only if there's actually an update
+  const availableVersionToReturn = hasUpdate ? currentRelease?.title ?? null : null;
+
   return {
     isUpdating,
-    isSavingToken,
     updateError,
     updateSuccess,
     updatePlugin,
     clearError,
-    changelog,
-    isLoadingChangelog,
-    changelogError,
-    availableVersion,
+    changelog: currentRelease?.changelog ?? null,
+    isLoadingChangelog: isLoadingReleases,
+    changelogError: fetchError,
+    availableVersion: availableVersionToReturn,
     hasGithubToken,
     isDevReleasesOptedIn,
-    tokenInput,
-    setTokenInput,
-    saveGithubToken,
-    clearGithubToken,
     toggleDevReleasesOptIn,
     lastCheckedAt,
+    installedVersion,
+    releases,
+    isLoadingSettings,
   };
 };
+
