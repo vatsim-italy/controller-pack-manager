@@ -97,14 +97,14 @@ pub fn set_plugin_dev_releases_opt_in(opt_in: bool) -> Result<(), String> {
 }
 
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
+    // 1. Instant Path: Trust the config.
     let config = read_config_or_default()?;
-
-    // 1. Fast Path: Check config
     if let Some(version) = config.installed_plugin_version {
+        // Return immediately if we already have a saved version
         return Ok(Some(version));
     }
 
-    // 2. Identify Path
+    // 2. Fallback Path: Only do this if config is missing (e.g., first run or manual delete)
     let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
     let plugin_path = PathBuf::from(&app_data)
         .join("EuroScope/LIXX/Plugins")
@@ -115,28 +115,31 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
         return Ok(None);
     }
 
-    // 3. Hash Path: Match against full history
+    // Perform the heavy lifting once
     let calculated_digest = calculate_file_sha256(&plugin_path)?;
     let releases = fetch_releases()?;
 
-    // Check history first (includes older versions)
-    if let Some(entry) = releases.history.iter().find(|h| h.digest == calculated_digest) {
-        return Ok(Some(entry.name.clone()));
-    }
-
-    // Fallback: Check 'latest' and 'dev' specifically if they aren't in history
-    let mut check_list = vec![&releases.latest];
-    if let Some(dev) = &releases.dev { check_list.push(dev); }
-
-    for release in check_list {
-        if let Some(asset) = find_release_asset(release) {
-            if asset.digest.as_ref() == Some(&calculated_digest) {
-                return Ok(Some(release.title.clone()));
+    let version_name = releases.history.iter()
+        .find(|h| h.digest == calculated_digest)
+        .map(|h| h.name.clone())
+        .or_else(|| {
+            // Check latest/dev if not in history
+            if let Some(asset) = find_release_asset(&releases.latest) {
+                if asset.digest.as_ref() == Some(&calculated_digest) {
+                    return Some(releases.latest.title.clone());
+                }
             }
-        }
-    }
+            None
+        })
+        .unwrap_or_else(|| "installed".to_string());
 
-    Ok(Some("installed (unknown version)".to_string()))
+    // 3. PERSIST: Save the found version so next time is instant
+    update_config(|stored_config| {
+        stored_config.installed_plugin_version = Some(version_name.clone());
+        stored_config.installed_plugin_digest = Some(calculated_digest);
+    }).map_err(|e| format!("failed to update config: {}", e))?;
+
+    Ok(Some(version_name))
 }
 
 

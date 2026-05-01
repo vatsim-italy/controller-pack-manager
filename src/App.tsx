@@ -360,9 +360,9 @@ function App(
     const refreshAiracState = useCallback(async () => {
         try {
             const [installed, latest, available] = await Promise.all([
-                invoke<string | null>("get_installed_airac_version"),
+                invoke<string | null>("get_detected_installed_airac_version"),
                 invoke<string | null>("get_latest_airac_version"),
-                invoke<boolean | null>("check_airac_update_available"),
+                invoke<boolean | null>("is_new_airac_version_available"),
             ]);
 
             setAiracState({
