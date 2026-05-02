@@ -1,4 +1,4 @@
-import { ReactNode, isValidElement } from "react";
+import { ReactNode, isValidElement, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { usePluginUpdate } from "../hooks/usePluginUpdate";
@@ -6,9 +6,10 @@ import { usePluginUpdate } from "../hooks/usePluginUpdate";
 
 interface PluginSectionProps {
     startupError: string | null;
+    onUpdateComplete?: (newVersion: string | null) => void;
 }
 
-export const PluginSection = ({ startupError }: PluginSectionProps) => {
+export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSectionProps) => {
     const {
         isUpdating,
         updateError,
@@ -26,6 +27,7 @@ export const PluginSection = ({ startupError }: PluginSectionProps) => {
         installedVersion,
         isLoadingSettings,
     } = usePluginUpdate();
+
 
     const hasUpdate = Boolean(availableVersion);
     const currentInstalledVersionLabel = installedVersion
@@ -81,6 +83,12 @@ export const PluginSection = ({ startupError }: PluginSectionProps) => {
         return "";
     };
 
+    useEffect(() => {
+        if (updateSuccess && onUpdateComplete) {
+            onUpdateComplete(installedVersion ?? null);
+        }
+    }, [updateSuccess, installedVersion, onUpdateComplete]);
+
     return (
         <>
             <div className="space-y-6">
@@ -102,12 +110,6 @@ export const PluginSection = ({ startupError }: PluginSectionProps) => {
                             <div className="space-y-1.5">
                                 <h2 className="text-xl font-bold text-white">{cardTitle}</h2>
                                 <p className="text-xs text-secondary-500">Last check for updates: {formattedLastChecked}</p>
-                                {!hasGithubToken && (
-                                    <p className="text-xs text-accent-warning">Provide a GitHub access token to fetch plugin releases.</p>
-                                )}
-                                {hasGithubToken && !isDevReleasesOptedIn && (
-                                    <p className="text-xs text-accent-warning">Enable dev releases to install plugin updates.</p>
-                                )}
                             </div>
                         </div>
 
@@ -130,7 +132,7 @@ export const PluginSection = ({ startupError }: PluginSectionProps) => {
                             <button
                                 className="btn-primary px-5 py-2.5 text-sm font-bold"
                                 onClick={updatePlugin}
-                                disabled={isUpdating || startupError !== null || !isDevReleasesOptedIn}
+                                disabled={isUpdating || startupError !== null}
                             >
                                 {isUpdating ? "Updating..." : hasUpdate ? "Install Update" : installedVersion ? "Check for Updates" : "Install Plugin"}
                             </button>

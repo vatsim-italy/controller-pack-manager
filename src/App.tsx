@@ -57,6 +57,8 @@ function App(
         latest: initialLatest,
         available: initialAvailable
     });
+    const [currentPluginVersion, setCurrentPluginVersion] = useState(installedPluginVersion);
+
 
     const refreshProfiles = async () => {
         try {
@@ -392,6 +394,7 @@ function App(
              return (
                  <PluginSection
                      startupError={startupError}
+                     onUpdateComplete={(newVersion) => setCurrentPluginVersion(newVersion)}
                  />
              );
          }
@@ -482,7 +485,7 @@ function App(
                             {activeSection === "plugin" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
                                     {installedPluginVersion
-                                        ? `${installedPluginVersion}`
+                                        ? `${currentPluginVersion}`
                                         : `AIRAC ${airacState.installed ?? "unknown"}`}
                                 </span>
                             )}

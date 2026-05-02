@@ -205,16 +205,6 @@ export const usePluginUpdate = () => {
   };
 
   const updatePlugin = async () => {
-    if (!hasGithubToken) {
-      setUpdateError("Provide a GitHub access token before installing plugin updates.");
-      return;
-    }
-
-    if (!isDevReleasesOptedIn) {
-      setUpdateError("Enable dev releases to install plugin updates from GitHub.");
-      return;
-    }
-
     setIsUpdating(true);
     setUpdateError(null);
     setUpdateSuccess(false);
