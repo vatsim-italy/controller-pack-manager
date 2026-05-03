@@ -26,10 +26,7 @@ type AppProps = {
 function App(
     {
         euroscopeConfigPath,
-        installedAiracVersion,
-        latestAiracVersion,
         installedPluginVersion,
-        newAiracVersionAvailable,
         profiles,
         hoppieCode,
         listConfigs,
