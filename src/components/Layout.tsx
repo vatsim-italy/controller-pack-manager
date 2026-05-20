@@ -1,14 +1,12 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { VersionWarning } from "./VersionWarning";
 import type { DashboardSection } from "../App";
-import logo from "../assets/logo.png";
 
 interface LayoutProps {
     children: ReactNode;
     activeSection: DashboardSection;
     onSectionChange: (section: DashboardSection) => void;
-    isEuroscopeDetected: boolean;
 }
 
 const IconDocument = () => (
@@ -41,17 +39,6 @@ const IconCompass = () => (
     </svg>
 );
 
-const IconList = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6" aria-hidden>
-        <path d="M9 6h11" />
-        <path d="M9 12h11" />
-        <path d="M9 18h11" />
-        <circle cx="4" cy="6" r="1" />
-        <circle cx="4" cy="12" r="1" />
-        <circle cx="4" cy="18" r="1" />
-    </svg>
-);
-
 const dashboardItems: Array<{
     id: DashboardSection;
     label: string;
@@ -61,34 +48,9 @@ const dashboardItems: Array<{
         { id: "plugin", label: "Plugin", icon: <IconPlugin /> },
         { id: "profiles", label: "Profiles", icon: <IconProfile /> },
         { id: "topsky", label: "TopSky", icon: <IconCompass /> },
-        // { id: "lists", label: "Lists", icon: <IconList /> }, // TODO: Enable for full release
     ];
 
-type AppMenuKey = "file" | "navigate" | "help" | null;
-
-export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDetected }: LayoutProps) => {
-    const [openMenu, setOpenMenu] = useState<AppMenuKey>(null);
-
-    const toggleMenu = (menu: Exclude<AppMenuKey, null>) => {
-        setOpenMenu((current) => (current === menu ? null : menu));
-    };
-
-    const navigateToSection = (section: DashboardSection) => {
-        onSectionChange(section);
-        setOpenMenu(null);
-    };
-
-    const reloadApp = () => {
-        setOpenMenu(null);
-        window.location.reload();
-    };
-
-    const menuButtonClass = (menu: Exclude<AppMenuKey, null>) =>
-        `px-3 py-1.5 text-xs font-semibold transition-colors ${openMenu === menu
-            ? "bg-secondary-600 text-white"
-            : "text-secondary-300 hover:bg-secondary-600 hover:text-white"
-        }`;
-
+export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps) => {
     return (
         <ErrorBoundary>
             <div className="flex h-screen w-full flex-col overflow-hidden bg-secondary-700 text-white">

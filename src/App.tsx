@@ -431,7 +431,6 @@ function App(
         <Layout
             activeSection={activeSection}
             onSectionChange={setActiveSection}
-            isEuroscopeDetected={Boolean(euroscopeConfigPath)}
         >
             <div className="w-full space-y-4">
                 <section className="border-b border-secondary-600 pb-3">
