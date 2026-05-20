@@ -92,42 +92,40 @@ export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDe
         <ErrorBoundary>
             <div className="flex h-screen w-full flex-col overflow-hidden bg-secondary-700 text-white">
                 <div className="flex min-h-0 flex-1 overflow-hidden">
-                    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-secondary-600 bg-dark-header">
-                        <div className="border-b border-secondary-600 px-5 py-6">
-                            <div className="flex items-center gap-3">
-                                <img src={logo} alt="VATITA logo" className="h-9 w-9 object-contain" />
-                                <div className="text-2xl font-bold leading-none text-white">VATITA</div>
-                            </div>
-                        </div>
+                <aside className="flex h-full w-56 shrink-0 flex-col border-r border-secondary-600 bg-dark-header">
+                    <div className="border-b border-secondary-600 px-4 py-4">
+                        <img
+                            src="https://www.vatita.net/images/Logo_e_scritta_white.svg"
+                            alt="VATITA logo"
+                            className="h-11 w-auto max-w-[140px] object-contain"
+                        />
+                    </div>
 
-                        <nav className="flex-1 space-y-2 p-4" aria-label="Primary">
-                            {dashboardItems.map((item) => {
-                                const isActive = item.id === activeSection;
+                    <nav className="flex-1 space-y-1 p-3" aria-label="Primary">
+                        {dashboardItems.map((item) => {
+                            const isActive = item.id === activeSection;
 
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => onSectionChange(item.id)}
-                                        className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold transition-all duration-150 ${isActive
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => onSectionChange(item.id)}
+                                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 ${
+                                        isActive
                                             ? "bg-primary-600 text-white shadow-lg"
                                             : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
-                                            }`}
-                                    >
-                                        <span aria-hidden className="text-secondary-100">{item.icon}</span>
-                                        <span>{item.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
+                                    }`}
+                                >
+                                    <span aria-hidden className="text-secondary-100">
+                                        {item.icon}
+                                    </span>
 
-                        <div className="space-y-3 border-t border-secondary-600 p-4">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-secondary-100">
-                                <span className={`h-2 w-2 rounded-full ${isEuroscopeDetected ? "bg-accent-success" : "bg-accent-danger"}`}></span>
-                                {isEuroscopeDetected ? "EuroScope Detected" : "EuroScope Not Detected"}
-                            </div>
-                        </div>
-                    </aside>
+                                    <span>{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </aside>
 
                     <main className="flex-1 overflow-y-auto px-6 py-5">
                         {children}
