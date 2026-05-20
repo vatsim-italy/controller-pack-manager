@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import tauriConf from "../../src-tauri/tauri.conf.json";
 
 export interface VersionCheckResult {
   localVersion: string;
@@ -8,7 +9,7 @@ export interface VersionCheckResult {
   loading: boolean;
 }
 
-const LOCAL_VERSION = "0.1.2"; // This should match your tauri.conf.json version
+const LOCAL_VERSION: string = (tauriConf as any)?.version ?? "0.0.0";
 
 export const useVersionCheck = (): VersionCheckResult => {
   const [result, setResult] = useState<VersionCheckResult>({
