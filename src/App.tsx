@@ -475,7 +475,7 @@ function App(
                             )}
                             {activeSection === "sector-file" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    AIRAC {airacState.installed ?? "unknown"}
+                                    AIRAC {airacState.installed ?? "Not installed"}
                                 </span>
                             )}
                             {activeSection === "plugin" && (

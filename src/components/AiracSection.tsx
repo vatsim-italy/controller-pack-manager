@@ -39,15 +39,19 @@ export const AiracSection = ({
 
     const hasUpdate = newAiracVersionAvailable === true && !updateSuccess;
     const isUpToDate = installedAiracVersion === latestAiracVersion && latestAiracVersion !== null;
-    const requiresSectorImport = hasUpdate && !hasImportedSectorFiles;
-    const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "unknown";
+    const isInstalled = !!installedAiracVersion;
+    const installedDisplay = installedAiracVersion ?? "Not installed";
+    const requiresSectorImport = !hasImportedSectorFiles && (hasUpdate || !isInstalled);
+    const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "Not installed";
     const cardTitle = startupError
-        ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
+        ? `Update Status Unavailable: AIRAC ${installedDisplay}`
+        : !isInstalled
+            ? `Not Installed`
         : hasUpdate
             ? `Update: AIRAC ${targetAiracVersion}`
         : (updateSuccess || isUpToDate)
-            ? `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`
-            : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+            ? `Up to Date: AIRAC ${installedDisplay}`
+            : `Up to Date: AIRAC ${installedDisplay}`;
     const statusText = startupError
         ? "AIRAC information could not be loaded."
         : requiresSectorImport && !hasOpenedSectorDownload
@@ -55,8 +59,8 @@ export const AiracSection = ({
             : requiresSectorImport
                 ? "Import the downloaded AeroNav ZIP to unlock installation."
                 : hasUpdate
-                    ? `Ready to install over AIRAC ${installedAiracVersion ?? "unknown"}.`
-                    : "Installed files match the latest GitHub release.";
+                    ? (isInstalled ? `Ready to install over AIRAC ${installedDisplay}.` : "Ready to install (not currently installed).")
+                    : (isInstalled ? "Installed files match the latest GitHub release." : "No AIRAC files detected.");
     const primaryActionLabel = isUpdating
         ? "Installing..."
         : isImportingSectorZip
@@ -67,7 +71,9 @@ export const AiracSection = ({
                     ? "Import Sector ZIP"
                     : hasUpdate
                         ? "Install Update"
-                        : "Check for Updates";
+                        : !isInstalled
+                            ? "Install"
+                            : "Check for Updates";
     const primaryActionClassName = requiresSectorImport
         ? "btn-warning px-5 py-2.5 text-sm font-bold"
         : "btn-primary px-5 py-2.5 text-sm font-bold";
@@ -96,6 +102,12 @@ export const AiracSection = ({
         }
 
         if (hasUpdate) {
+            await updateAirac();
+            setHasOpenedSectorDownload(false);
+            return;
+        }
+
+        if (!isInstalled) {
             await updateAirac();
             setHasOpenedSectorDownload(false);
             return;
@@ -135,6 +147,8 @@ export const AiracSection = ({
         })
         : "Never";
 
+    const changelogVersion = latestAiracVersion ?? installedAiracVersion ?? "Not installed";
+
     return (
         <div className="space-y-6">
             <section className="rounded-xl border border-secondary-600 bg-dark-header p-6 shadow-md">
@@ -143,6 +157,8 @@ export const AiracSection = ({
                         <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-secondary-600 bg-secondary-700">
                             {startupError ? (
                                 <span className="text-2xl text-accent-danger">⚠</span>
+                            ) : !isInstalled ? (
+                                <span className="text-2xl text-primary-600">⬇</span>
                             ) : hasUpdate ? (
                                 <span className="text-2xl text-accent-warning">↻</span>
                             ) : (
@@ -249,7 +265,7 @@ export const AiracSection = ({
                 <div className="overflow-hidden rounded-xl border border-secondary-600 bg-dark-header shadow-sm">
                     <div className="flex items-center justify-between border-b border-secondary-600 bg-secondary-700/50 p-6">
                         <span className="font-bold uppercase tracking-tight text-white">
-                            Version {installedAiracVersion ?? "unknown"}
+                            Version {changelogVersion}
                         </span>
                         <span className="text-xs font-medium text-secondary-500">
                             Latest release notes

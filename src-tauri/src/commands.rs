@@ -59,6 +59,52 @@ pub fn get_detected_installed_airac_version(
 }
 
 #[tauri::command]
+pub fn refresh_detected_installed_airac_version(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let euroscope_dir = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone();
+
+    if let Some(dir) = euroscope_dir {
+        let airac_file = std::path::PathBuf::from(&dir).join("LIXX").join("AIRAC_VERSION.txt");
+        if let Ok(content) = std::fs::read_to_string(&airac_file) {
+            let detected = content.split(' ').skip(1).next().map(|v| v.trim().to_string());
+
+            // Update in-memory AppState
+            let mut lock = state
+                .installed_airac_version
+                .lock()
+                .map_err(|error| error.to_string())?;
+            let previous = lock.clone();
+            *lock = detected.clone();
+
+            // If detected version differs from stored config, clear any stored digest
+            // so update checks will re-evaluate using the detected version.
+            if detected != previous {
+                let _ = update_config(|config| {
+                    config.installed_airac_version = detected.clone();
+                    config.installed_airac_digest = None;
+                    config.installed_airac_digest_source = None;
+                });
+            }
+
+            return Ok(detected);
+        }
+    }
+
+    // No euroscope dir or file; clear stored installed version
+    let mut lock = state
+        .installed_airac_version
+        .lock()
+        .map_err(|error| error.to_string())?;
+    *lock = None;
+    Ok(None)
+}
+
+#[tauri::command]
 pub fn is_new_airac_version_available(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<bool>, String> {
@@ -200,14 +246,14 @@ pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<S
         .clone()
         .unwrap_or_default();
 
+    // If no hoppie code is stored in app state, proceed with an empty string
+    // — the installer will skip patching hoppie code when empty.
     let hoppie_code = state
         .hoppie_code
         .lock()
         .map_err(|error| error.to_string())?
         .clone()
-        .ok_or_else(|| {
-            "unable to patch hoppie code: no hoppie code stored in app state".to_string()
-        })?;
+        .unwrap_or_default();
 
     let (changelog, version) = tauri::async_runtime::spawn_blocking(move || {
         run_update_airac_version(euroscope_config_dir, existing_profiles, hoppie_code)

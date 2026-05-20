@@ -197,7 +197,9 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
     setUpdateError(null);
 
     try {
-      const [, updateAvailable] = await Promise.all([
+      // Re-detect local installed AIRAC first, then fetch changelog and update status
+      const [, , updateAvailable] = await Promise.all([
+        invoke<string | null>("refresh_detected_installed_airac_version").catch(() => null),
         fetchLatestChangelog(true),
         invoke<boolean>("refresh_airac_update_status"),
       ]);

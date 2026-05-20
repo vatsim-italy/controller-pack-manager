@@ -179,7 +179,9 @@ const bootstrap = async () => {
         hoppieCodeResult,
     ] = await Promise.all([
         readOptional<string | null>("get_detected_installed_airac_version"),
-        readOptional<string | null>("get_latest_airac_version"),
+        // Fetching the latest AIRAC version can fail due to network/GitHub issues;
+        // treat it as non-critical so the app doesn't show a startup error.
+        readNonCritical<string | null>("get_latest_airac_version"),
         readOptional<string | null>("get_installed_plugin_version"),
         readOptional<Profile[] | null>("get_existing_profiles"),
         readNonCritical<boolean>("refresh_airac_update_status"),

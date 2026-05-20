@@ -568,7 +568,10 @@ pub fn run_update_airac_version(
     let destination_lixx = euroscope_config_path.join("LIXX");
     copy_release_content(&content_root, &euroscope_config_path, &destination_lixx)?;
     write_airac_version_file(&destination_lixx, &latest_version)?;
-    patch_hoppie_code(&euroscope_config_path, &hoppie_code)?;
+    // Only patch hoppie code when a non-empty code is provided.
+    if !hoppie_code.trim().is_empty() {
+        patch_hoppie_code(&euroscope_config_path, &hoppie_code)?;
+    }
 
     update_config(|config| {
         config.installed_airac_version = Some(latest_version.clone());
