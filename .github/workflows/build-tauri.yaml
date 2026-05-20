@@ -46,6 +46,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_STARTUP_UPDATE_CHECKS: "1"
         with:
           args: --target x86_64-pc-windows-msvc --bundles msi
 

@@ -61,6 +61,26 @@ pub fn is_new_airac_version_available(
 pub async fn refresh_airac_update_status(
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, String> {
+    let skip_update_checks = env::var("SKIP_STARTUP_UPDATE_CHECKS")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+        || env::var("GITHUB_ACTIONS")
+            .map(|value| value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        || env::var("CI")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+    if skip_update_checks {
+        let mut available = state
+            .new_airac_version_available
+            .lock()
+            .map_err(|error| error.to_string())?;
+        *available = Some(false);
+        println!("[AIRAC] Skipping update status check in CI/build environment");
+        return Ok(false);
+    }
+
     let installed_version = state
         .installed_airac_version
         .lock()
