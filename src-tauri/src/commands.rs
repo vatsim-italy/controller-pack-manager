@@ -24,6 +24,18 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn should_skip_startup_update_checks() -> bool {
+    env::var("SKIP_STARTUP_UPDATE_CHECKS")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+        || env::var("GITHUB_ACTIONS")
+            .map(|value| value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        || env::var("CI")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn get_detected_euroscope_config_dir(
     state: tauri::State<'_, AppState>,
@@ -241,6 +253,11 @@ pub async fn get_latest_airac_changelog() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_latest_airac_version() -> Result<String, String> {
+    if should_skip_startup_update_checks() {
+        println!("[AIRAC] Skipping latest AIRAC version fetch in CI/build environment");
+        return Ok("unknown".to_string());
+    }
+
     tauri::async_runtime::spawn_blocking(run_get_latest_airac_version)
         .await
         .map_err(|error| format!("latest AIRAC version task failed: {}", error))?
@@ -287,6 +304,11 @@ pub fn set_plugin_dev_releases_opt_in_command(opt_in: bool) -> Result<(), String
 
 #[tauri::command]
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
+    if should_skip_startup_update_checks() {
+        println!("[Plugin] Skipping installed plugin version lookup in CI/build environment");
+        return Ok(None);
+    }
+
     read_installed_plugin_version()
 }
 

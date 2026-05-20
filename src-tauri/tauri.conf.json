@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "VATITA Controller Pack Manager",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "identifier": "com.vatita.controller-pack-manager",
     "build": {
         "beforeDevCommand": "npm run dev",
