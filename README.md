@@ -56,19 +56,3 @@ Sector files (`.sct` / `.ese`) are **not** downloaded automatically by the app, 
 
 The installer is intentionally blocked until valid imported sector files are present.
 
-## How to get the GitHub access token (for plugin updates)
-
-Plugin updates are fetched from GitHub and require a personal access token.
-
-### Steps
-
-1. Open GitHub: **Settings → Developer settings → Personal access tokens**.
-2. Create a token (classic or fine-grained, depending on your GitHub policy).
-3. Grant **read access to repository contents/releases** for the plugin source repository.
-4. Copy the token value.
-5. In the app, open **Plugin → Set/Manage Token**, paste token, and save.
-
-### Notes
-
-- Without a token, plugin release metadata and updates are unavailable.
-- If plugin updates fail, first verify token validity and repository access scope.
