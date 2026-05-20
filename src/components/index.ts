@@ -10,3 +10,4 @@ export { ListsSection } from "./ListsSection";
 export { ListConfigCard } from "./ListConfigCard";
 export { ScreenConfigSection } from "./ScreenConfigSection";
 export { BooleanListCard } from "./BooleanListCard";
+export { VersionWarning } from "./VersionWarning";

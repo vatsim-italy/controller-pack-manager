@@ -230,7 +230,7 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
                             </span>
                         </div>
 
-                        <div className="custom-scrollbar max-h-[calc(100vh-410px)] overflow-y-auto p-6">
+                        <div className="custom-scrollbar max-h-96 overflow-y-auto p-6">
                             {isLoadingChangelog ? (
                                 <p className="text-sm text-secondary-500">Loading latest release notes…</p>
                             ) : changelogError ? (

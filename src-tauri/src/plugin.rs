@@ -149,17 +149,37 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     println!("[Plugin] Installed version: {:?}", config.installed_plugin_version);
     println!("[Plugin] Installed digest: {:?}", config.installed_plugin_digest);
 
-    // We fetch current availability regardless of opt-in to check version
-    let release = select_release(config.plugin_dev_releases_opt_in)?;
+    // Fast path: use cached latest digest if available
+    if let Some(latest_digest) = config.latest_plugin_digest.as_ref() {
+        if let Some(installed_digest) = config.installed_plugin_digest.as_ref() {
+            println!("[Plugin] Using cached latest digest");
+            if installed_digest.trim() == latest_digest.trim() {
+                println!("[Plugin] Digests match - no update needed");
+                return Ok(None);
+            }
+            println!("[Plugin] Cached digests differ - update available");
+            return Ok(config.latest_plugin_version.clone());
+        }
+    }
 
+    // Slow path: fetch from network and cache
+    let release = select_release(config.plugin_dev_releases_opt_in)?;
     if release.title.trim().is_empty() {
         println!("[Plugin] Release title is empty, no update");
         return Ok(None);
     }
 
     let latest_digest = find_release_asset(&release).and_then(|a| a.digest.clone());
-    println!("[Plugin] Latest version: {}", release.title);
-    println!("[Plugin] Latest digest: {:?}", latest_digest);
+    let latest_version = release.title.trim().to_string();
+    
+    // Cache the fetched result for next time
+    update_config(|stored_config| {
+        stored_config.latest_plugin_version = Some(latest_version.clone());
+        stored_config.latest_plugin_digest = latest_digest.clone();
+    }).map_err(|e| format!("failed to cache plugin info: {}", e))?;
+    
+    println!("[Plugin] Latest version (fetched): {}", latest_version);
+    println!("[Plugin] Latest digest (fetched): {:?}", latest_digest);
 
     // Compare by digest if available (more reliable)
     if let Some(latest) = latest_digest {
@@ -173,11 +193,10 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
             println!("[Plugin] No installed digest but digest available - update available");
         }
         // Different digest or no stored digest, update available
-        return Ok(Some(release.title.trim().to_string()));
+        return Ok(Some(latest_version));
     }
 
     // Fallback to version string comparison if digest not available
-    let latest_version = release.title.trim().to_string();
     println!("[Plugin] Digest not available, falling back to version comparison");
     if config
         .installed_plugin_version
@@ -292,6 +311,9 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     update_config(|stored_config| {
         stored_config.installed_plugin_version = installed_version.clone();
         stored_config.installed_plugin_digest = installed_digest.clone();
+        // Also update cached latest to match installed (no update available anymore)
+        stored_config.latest_plugin_version = installed_version.clone();
+        stored_config.latest_plugin_digest = installed_digest.clone();
     }).map_err(|e| format!("failed to update config: {}", e))?;
 
     println!("[Plugin] Update completed successfully!");

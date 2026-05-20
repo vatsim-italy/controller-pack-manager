@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { VersionWarning } from "./VersionWarning";
 import type { DashboardSection } from "../App";
 import logo from "../assets/logo.png";
 
@@ -60,7 +61,7 @@ const dashboardItems: Array<{
         { id: "plugin", label: "Plugin", icon: <IconPlugin /> },
         { id: "profiles", label: "Profiles", icon: <IconProfile /> },
         { id: "topsky", label: "TopSky", icon: <IconCompass /> },
-        { id: "lists", label: "Lists", icon: <IconList /> },
+        // { id: "lists", label: "Lists", icon: <IconList /> }, // TODO: Enable for full release
     ];
 
 type AppMenuKey = "file" | "navigate" | "help" | null;
@@ -130,6 +131,7 @@ export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDe
                     <main className="flex-1 overflow-y-auto px-6 py-5">
                         {children}
                     </main>
+                    <VersionWarning />
                 </div>
             </div>
         </ErrorBoundary>
