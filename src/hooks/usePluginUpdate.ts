@@ -12,8 +12,12 @@ type PluginRelease = {
 };
 
 type PluginApiResponse = {
-  dev: PluginRelease;
+  dev: PluginRelease | null;
   latest: PluginRelease;
+  history: Array<{
+    digest: string;
+    name: string;
+  }>;
 };
 
 type PluginCache = {
@@ -67,6 +71,7 @@ export const usePluginUpdate = () => {
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(readPluginCachedLastChecked());
   const [settingsReady, setSettingsReady] = useState(false);
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
+  const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   const buildCacheKey = useCallback((tokenAvailable: boolean, devOptIn: boolean) => {
@@ -90,20 +95,6 @@ export const usePluginUpdate = () => {
       setFetchError(pluginCache.fetchError);
       setLastCheckedAt(readPluginCachedLastChecked());
       setIsLoadingReleases(false);
-      return;
-    }
-
-    if (!tokenAvailable) {
-      setReleases(null);
-      setFetchError("Provide a GitHub access token to access plugin releases.");
-      const checkedAt = Date.now();
-      setLastCheckedAt(new Date(checkedAt));
-
-      pluginCache.key = cacheKey;
-      pluginCache.fetched = true;
-      pluginCache.releases = null;
-      pluginCache.fetchError = "Provide a GitHub access token to access plugin releases.";
-      pluginCache.lastCheckedAtMs = checkedAt;
       return;
     }
 
@@ -164,15 +155,43 @@ export const usePluginUpdate = () => {
     }
   }, []);
 
+  const refreshAvailableVersion = useCallback(async () => {
+    const installableVersion = await invoke<string | null>("get_latest_plugin_installable_version");
+    setAvailableVersion(installableVersion ?? null);
+    return installableVersion ?? null;
+  }, []);
+
   const fetchLatestReleases = useCallback(async () => {
     await fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn);
   }, [fetchReleasesWithFlags, hasGithubToken, isDevReleasesOptedIn]);
+
+  const checkForUpdates = useCallback(async () => {
+    setUpdateError(null);
+    setUpdateSuccess(false);
+    setIsLoadingReleases(true);
+
+    try {
+      const { tokenAvailable, devOptIn } = await refreshSettings();
+      await Promise.all([
+        fetchReleasesWithFlags(tokenAvailable, devOptIn, true),
+        refreshAvailableVersion(),
+      ]);
+    } catch (error) {
+      setUpdateError(normalizeError(error));
+    } finally {
+      setIsLoadingReleases(false);
+      setLastCheckedAt(new Date());
+    }
+  }, [fetchReleasesWithFlags, refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     const loadSettings = async () => {
       setIsLoadingSettings(true);
       try {
         await refreshSettings();
+        await refreshAvailableVersion();
+      } catch (error) {
+        setUpdateError(normalizeError(error));
       } finally {
         setIsLoadingSettings(false);
         setSettingsReady(true);
@@ -180,7 +199,7 @@ export const usePluginUpdate = () => {
     };
 
     void loadSettings();
-  }, [refreshSettings]);
+  }, [refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     if (!settingsReady) {
@@ -198,7 +217,10 @@ export const usePluginUpdate = () => {
       setIsDevReleasesOptedIn(optIn);
       setUpdateSuccess(false);
 
-      await fetchReleasesWithFlags(hasGithubToken, optIn, true);
+      await Promise.all([
+        fetchReleasesWithFlags(hasGithubToken, optIn, true),
+        refreshAvailableVersion(),
+      ]);
     } catch (error) {
       setUpdateError(normalizeError(error));
     }
@@ -210,13 +232,18 @@ export const usePluginUpdate = () => {
     setUpdateSuccess(false);
 
     try {
+      if (!hasGithubToken) {
+        throw new Error("Provide a GitHub access token before installing plugin updates.");
+      }
+
       const latestVersion = await invoke<string>("update_plugin_version");
       setUpdateSuccess(true);
       setInstalledVersion(latestVersion);
-      await fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn, true);
-
-      const timer = setTimeout(() => setUpdateSuccess(false), 3000);
-      return () => clearTimeout(timer);
+      setAvailableVersion(null);
+      await Promise.all([
+        fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn, true),
+        refreshAvailableVersion(),
+      ]);
     } catch (error) {
       setUpdateError(normalizeError(error));
     } finally {
@@ -227,31 +254,31 @@ export const usePluginUpdate = () => {
 
   const clearError = () => setUpdateError(null);
 
+  useEffect(() => {
+    if (!updateSuccess) {
+      return;
+    }
+
+    const timer = setTimeout(() => setUpdateSuccess(false), 3000);
+    return () => clearTimeout(timer);
+  }, [updateSuccess]);
+
   // Get the current release based on dev opt-in
   const currentRelease = releases
     ? (isDevReleasesOptedIn ? releases.dev : releases.latest)
     : null;
-
-  // Determine if an update is available
-  const hasUpdate = Boolean(
-    currentRelease &&
-    installedVersion &&
-    currentRelease.title.trim() !== installedVersion.trim()
-  );
-
-  // Return the available version only if there's actually an update
-  const availableVersionToReturn = hasUpdate ? currentRelease?.title ?? null : null;
 
   return {
     isUpdating,
     updateError,
     updateSuccess,
     updatePlugin,
+    checkForUpdates,
     clearError,
     changelog: currentRelease?.changelog ?? null,
     isLoadingChangelog: isLoadingReleases,
     changelogError: fetchError,
-    availableVersion: availableVersionToReturn,
+    availableVersion,
     hasGithubToken,
     isDevReleasesOptedIn,
     toggleDevReleasesOptIn,

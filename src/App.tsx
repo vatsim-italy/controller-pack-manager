@@ -361,7 +361,7 @@ function App(
             const [installed, latest, available] = await Promise.all([
                 invoke<string | null>("get_detected_installed_airac_version"),
                 invoke<string | null>("get_latest_airac_version"),
-                invoke<boolean | null>("is_new_airac_version_available"),
+                invoke<boolean>("refresh_airac_update_status"),
             ]);
 
             setAiracState({
@@ -481,9 +481,9 @@ function App(
                             )}
                             {activeSection === "plugin" && (
                                 <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    {installedPluginVersion
+                                    {currentPluginVersion
                                         ? `${currentPluginVersion}`
-                                        : `AIRAC ${airacState.installed ?? "unknown"}`}
+                                        : "Plugin not installed"}
                                 </span>
                             )}
                         </div>

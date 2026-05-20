@@ -105,8 +105,10 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
   const refreshImportedSectorFiles = useCallback(async () => {
     try {
       const isReady = await invoke<boolean>("has_imported_airac_sector_files");
+      console.log("[AIRAC] Imported sector files ready:", isReady);
       setHasImportedSectorFiles(isReady);
     } catch {
+      console.log("[AIRAC] Imported sector files ready check failed");
       setHasImportedSectorFiles(false);
     }
   }, []);
@@ -170,6 +172,7 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
 
     try {
       const latestChangelog = await invoke<string | null>("update_airac_version");
+      console.log("[AIRAC] Install command completed");
       const normalized = normalizeChangelog(latestChangelog);
       const checkedAt = Date.now();
 
@@ -181,10 +184,6 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
       airacCache.changelog = normalized;
       airacCache.lastCheckedAtMs = checkedAt;
       airacCache.fetched = true;
-
-      // Auto-clear success message after 3 seconds
-      const timer = setTimeout(() => setUpdateSuccess(false), 3000);
-      return () => clearTimeout(timer);
     } catch (error) {
       setUpdateError(normalizeError(error));
     } finally {
@@ -195,7 +194,18 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
   };
 
   const checkForUpdates = async () => {
-    await fetchLatestChangelog(true);
+    setUpdateError(null);
+
+    try {
+      const [, updateAvailable] = await Promise.all([
+        fetchLatestChangelog(true),
+        invoke<boolean>("refresh_airac_update_status"),
+      ]);
+      console.log("[AIRAC] Refresh update status completed:", updateAvailable);
+      onUpdateComplete?.();
+    } catch (error) {
+      setUpdateError(normalizeError(error));
+    }
   };
 
   const clearError = () => {
@@ -203,6 +213,15 @@ export const useAiracUpdate = (onUpdateComplete?: () => void) => {
     setSectorImportError(null);
   };
   const clearSuccess = () => setUpdateSuccess(false);
+
+  useEffect(() => {
+    if (!updateSuccess) {
+      return;
+    }
+
+    const timer = setTimeout(() => setUpdateSuccess(false), 3000);
+    return () => clearTimeout(timer);
+  }, [updateSuccess]);
 
   return {
     isUpdating,

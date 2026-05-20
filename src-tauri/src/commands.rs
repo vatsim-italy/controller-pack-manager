@@ -1,13 +1,14 @@
 use crate::airac::{
-    run_get_latest_airac_changelog, run_get_latest_airac_version, run_has_imported_sector_files,
-    run_import_sector_files_from_zip, run_update_airac_version,
+    run_get_latest_airac_changelog, run_get_latest_airac_release_digest,
+    run_get_latest_airac_version, run_has_imported_sector_files, run_import_sector_files_from_zip,
+    run_update_airac_version,
 };
+use crate::config::{read_config_or_default, update_config};
 use crate::github_http::{clear_stored_github_token, resolve_github_token, store_github_token};
 use crate::plugin::{
     get_installed_plugin_version as read_installed_plugin_version,
     get_latest_plugin_installable_version as read_latest_plugin_installable_version,
-    get_plugin_dev_releases_opt_in as read_plugin_dev_releases_opt_in,
-    get_plugin_releases,
+    get_plugin_dev_releases_opt_in as read_plugin_dev_releases_opt_in, get_plugin_releases,
     run_get_latest_plugin_changelog, run_update_plugin_version,
     set_plugin_dev_releases_opt_in as write_plugin_dev_releases_opt_in,
 };
@@ -54,6 +55,60 @@ pub fn is_new_airac_version_available(
         .lock()
         .map_err(|error| error.to_string())?;
     Ok(lock.clone())
+}
+
+#[tauri::command]
+pub async fn refresh_airac_update_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    let installed_version = state
+        .installed_airac_version
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone();
+    let latest_release = tauri::async_runtime::spawn_blocking(run_get_latest_airac_release_digest)
+        .await
+        .map_err(|error| format!("AIRAC digest check task failed: {}", error))??;
+
+    let config = read_config_or_default()?;
+    let installed_digest = config.installed_airac_digest.clone();
+    let digest_source = config.installed_airac_digest_source.clone();
+    let update_available = if digest_source.as_deref() == Some("hash_txt") {
+        installed_digest
+            .as_deref()
+            .map(|digest| digest.trim() != latest_release.digest.trim())
+            .unwrap_or(true)
+    } else if installed_version
+        .as_deref()
+        .is_some_and(|version| version.trim() == latest_release.version.trim())
+    {
+        let latest_version = latest_release.version.clone();
+        let latest_digest = latest_release.digest.clone();
+        update_config(|config| {
+            config.installed_airac_version = Some(latest_version);
+            config.installed_airac_digest = Some(latest_digest);
+            config.installed_airac_digest_source = Some("hash_txt".to_string());
+        })
+        .map_err(|error| format!("unable to migrate AIRAC digest status: {}", error))?;
+        false
+    } else if let Some(installed_version) = installed_version.as_deref() {
+        AppState::is_latest_newer(installed_version, &latest_release.version).unwrap_or(true)
+    } else {
+        true
+    };
+
+    println!(
+        "[AIRAC] Update status: installed_version={:?}, installed_digest={:?}, digest_source={:?}, latest_version={}, latest_digest={}, update_available={}",
+        installed_version, installed_digest, digest_source, latest_release.version, latest_release.digest, update_available
+    );
+
+    let mut available = state
+        .new_airac_version_available
+        .lock()
+        .map_err(|error| error.to_string())?;
+    *available = Some(update_available);
+
+    Ok(update_available)
 }
 
 #[tauri::command]
@@ -129,11 +184,15 @@ pub async fn update_airac_version(state: tauri::State<'_, AppState>) -> Result<S
     .map_err(|error| format!("update task failed: {}", error))??;
 
     {
-        let mut installed = state.installed_airac_version.lock()
+        let mut installed = state
+            .installed_airac_version
+            .lock()
             .map_err(|e| e.to_string())?;
         *installed = Some(version);
 
-        let mut available = state.new_airac_version_available.lock()
+        let mut available = state
+            .new_airac_version_available
+            .lock()
             .map_err(|e| e.to_string())?;
         *available = Some(false);
     }

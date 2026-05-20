@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { DashboardSection } from "../App";
 import logo from "../assets/logo.png";
@@ -63,50 +63,76 @@ const dashboardItems: Array<{
         { id: "lists", label: "Lists", icon: <IconList /> },
     ];
 
+type AppMenuKey = "file" | "navigate" | "help" | null;
+
 export const Layout = ({ children, activeSection, onSectionChange, isEuroscopeDetected }: LayoutProps) => {
+    const [openMenu, setOpenMenu] = useState<AppMenuKey>(null);
+
+    const toggleMenu = (menu: Exclude<AppMenuKey, null>) => {
+        setOpenMenu((current) => (current === menu ? null : menu));
+    };
+
+    const navigateToSection = (section: DashboardSection) => {
+        onSectionChange(section);
+        setOpenMenu(null);
+    };
+
+    const reloadApp = () => {
+        setOpenMenu(null);
+        window.location.reload();
+    };
+
+    const menuButtonClass = (menu: Exclude<AppMenuKey, null>) =>
+        `px-3 py-1.5 text-xs font-semibold transition-colors ${openMenu === menu
+            ? "bg-secondary-600 text-white"
+            : "text-secondary-300 hover:bg-secondary-600 hover:text-white"
+        }`;
+
     return (
         <ErrorBoundary>
-            <div className="flex h-screen w-full overflow-hidden bg-secondary-700 text-white">
-                <aside className="flex h-full w-64 shrink-0 flex-col border-r border-secondary-600 bg-dark-header">
-                    <div className="border-b border-secondary-600 px-5 py-6">
-                        <div className="flex items-center gap-3">
-                            <img src={logo} alt="VATITA logo" className="h-9 w-9 object-contain" />
-                            <div className="text-2xl font-bold leading-none text-white">VATITA</div>
+            <div className="flex h-screen w-full flex-col overflow-hidden bg-secondary-700 text-white">
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-secondary-600 bg-dark-header">
+                        <div className="border-b border-secondary-600 px-5 py-6">
+                            <div className="flex items-center gap-3">
+                                <img src={logo} alt="VATITA logo" className="h-9 w-9 object-contain" />
+                                <div className="text-2xl font-bold leading-none text-white">VATITA</div>
+                            </div>
                         </div>
-                    </div>
 
-                    <nav className="flex-1 space-y-2 p-4" aria-label="Primary">
-                        {dashboardItems.map((item) => {
-                            const isActive = item.id === activeSection;
+                        <nav className="flex-1 space-y-2 p-4" aria-label="Primary">
+                            {dashboardItems.map((item) => {
+                                const isActive = item.id === activeSection;
 
-                            return (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => onSectionChange(item.id)}
-                                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold transition-all duration-150 ${isActive
-                                        ? "bg-primary-600 text-white shadow-lg"
-                                        : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
-                                        }`}
-                                >
-                                    <span aria-hidden className="text-secondary-100">{item.icon}</span>
-                                    <span>{item.label}</span>
-                                </button>
-                            );
-                        })}
-                    </nav>
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => onSectionChange(item.id)}
+                                        className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold transition-all duration-150 ${isActive
+                                            ? "bg-primary-600 text-white shadow-lg"
+                                            : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
+                                            }`}
+                                    >
+                                        <span aria-hidden className="text-secondary-100">{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
 
-                    <div className="space-y-3 border-t border-secondary-600 p-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-secondary-100">
-                            <span className={`h-2 w-2 rounded-full ${isEuroscopeDetected ? "bg-accent-success" : "bg-accent-danger"}`}></span>
-                            {isEuroscopeDetected ? "EuroScope Detected" : "EuroScope Not Detected"}
+                        <div className="space-y-3 border-t border-secondary-600 p-4">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-secondary-100">
+                                <span className={`h-2 w-2 rounded-full ${isEuroscopeDetected ? "bg-accent-success" : "bg-accent-danger"}`}></span>
+                                {isEuroscopeDetected ? "EuroScope Detected" : "EuroScope Not Detected"}
+                            </div>
                         </div>
-                    </div>
-                </aside>
+                    </aside>
 
-                <main className="flex-1 overflow-y-auto px-6 py-5">
-                    {children}
-                </main>
+                    <main className="flex-1 overflow-y-auto px-6 py-5">
+                        {children}
+                    </main>
+                </div>
             </div>
         </ErrorBoundary>
     );

@@ -1,3 +1,4 @@
+use crate::config::update_config;
 use crate::github_http::{download_bytes, fetch_latest_release};
 use crate::profile::{patch_profile_file, Profile};
 use crate::topsky::patch_hoppie_code;
@@ -9,6 +10,8 @@ use std::path::{Path, PathBuf};
 
 const LATEST_RELEASE_API_URL: &str =
     "https://api.github.com/repos/vatsim-italy/VATITA-GNG-Files/releases/latest";
+const MAIN_BRANCH_HASH_URL: &str =
+    "https://raw.githubusercontent.com/vatsim-italy/VATITA-GNG-Files/main/hash.txt";
 const APP_DATA_FOLDER_NAME: &str = "controller-pack-manager";
 const IMPORTED_SECTOR_FILES_FOLDER_NAME: &str = "imported-sector-files";
 
@@ -239,6 +242,12 @@ pub fn run_has_imported_sector_files() -> Result<bool, String> {
     has_required_sector_files(&imported_sector_folder)
 }
 
+#[derive(Debug, Clone)]
+pub struct AiracReleaseDigest {
+    pub version: String,
+    pub digest: String,
+}
+
 fn download_and_extract_latest_release_with_version(
     download_folder: &Path,
 ) -> Result<(String, String), String> {
@@ -315,6 +324,43 @@ fn download_and_extract_latest_release_with_version(
     }
 
     Ok((changelog, latest_version))
+}
+
+fn normalize_hash_file_content(content: &str) -> Result<String, String> {
+    let digest = content
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with('#'))
+        .and_then(|line| line.split_whitespace().next())
+        .ok_or_else(|| "hash.txt is empty".to_string())?;
+
+    if digest.starts_with("sha256:") {
+        return Ok(digest.to_string());
+    }
+
+    Ok(format!("sha256:{}", digest))
+}
+
+fn fetch_main_branch_airac_digest() -> Result<String, String> {
+    let hash_bytes = download_bytes(MAIN_BRANCH_HASH_URL, None)?;
+    let hash_content = String::from_utf8(hash_bytes)
+        .map_err(|error| format!("hash.txt is not valid UTF-8: {}", error))?;
+    normalize_hash_file_content(&hash_content)
+}
+
+pub fn run_get_latest_airac_release_digest() -> Result<AiracReleaseDigest, String> {
+    println!("[AIRAC] Checking latest release digest from hash.txt...");
+    let latest_version = run_get_latest_airac_version()?;
+    let digest = fetch_main_branch_airac_digest()?;
+    println!(
+        "[AIRAC] Latest release digest resolved: version={}, digest={}",
+        latest_version, digest
+    );
+
+    Ok(AiracReleaseDigest {
+        version: latest_version,
+        digest,
+    })
 }
 
 fn write_airac_version_file(destination_lixx: &Path, latest_version: &str) -> Result<(), String> {
@@ -485,6 +531,12 @@ pub fn run_update_airac_version(
         download_and_extract_latest_release_with_version(&download_folder)?;
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
+    let release_digest = fetch_main_branch_airac_digest()?;
+    println!(
+        "[AIRAC] Installing release: version={}, release_digest={}",
+        latest_version, release_digest
+    );
+
     inject_imported_sector_files(&imported_sector_folder, &content_root)?;
 
     let euroscope_config_path = PathBuf::from(euroscope_config_dir);
@@ -517,6 +569,17 @@ pub fn run_update_airac_version(
     copy_release_content(&content_root, &euroscope_config_path, &destination_lixx)?;
     write_airac_version_file(&destination_lixx, &latest_version)?;
     patch_hoppie_code(&euroscope_config_path, &hoppie_code)?;
+
+    update_config(|config| {
+        config.installed_airac_version = Some(latest_version.clone());
+        config.installed_airac_digest = Some(release_digest.clone());
+        config.installed_airac_digest_source = Some("hash_txt".to_string());
+    })
+    .map_err(|error| format!("unable to save AIRAC install digest: {}", error))?;
+    println!(
+        "[AIRAC] Stored installed release digest: version={}, digest={}",
+        latest_version, release_digest
+    );
 
     fs::remove_dir_all(&download_folder).map_err(|error| {
         format!(

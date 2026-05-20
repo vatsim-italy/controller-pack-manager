@@ -18,10 +18,15 @@ pub fn run() {
         .manage(AppState::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            app.handle().remove_menu()?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_detected_euroscope_config_dir,
             get_detected_installed_airac_version,
             is_new_airac_version_available,
+            refresh_airac_update_status,
             get_existing_profiles,
             get_hoppie_code,
             update_hoppie_code,

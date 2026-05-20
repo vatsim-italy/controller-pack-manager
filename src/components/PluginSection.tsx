@@ -15,6 +15,7 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
         updateError,
         updateSuccess,
         updatePlugin,
+        checkForUpdates,
         clearError,
         changelog,
         isLoadingChangelog,
@@ -30,21 +31,26 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
 
 
     const hasUpdate = Boolean(availableVersion);
+    const primaryActionInstalls = hasUpdate || !installedVersion;
+    const isPrimaryDisabled =
+        isUpdating ||
+        isLoadingSettings ||
+        startupError !== null ||
+        (primaryActionInstalls && !hasGithubToken);
+    const primaryActionLabel = isUpdating
+        ? "Updating..."
+        : !hasGithubToken && primaryActionInstalls
+            ? "GitHub Token Required"
+            : hasUpdate
+                ? "Install Update"
+                : installedVersion
+                    ? "Check for Updates"
+                    : "Install Plugin";
     const currentInstalledVersionLabel = installedVersion
         ? installedVersion === "installed"
             ? "Installed (version unknown)"
             : `${installedVersion}`
         : "Not Installed";
-
-    // Debug logging
-    console.log("PluginSection render", {
-        availableVersion,
-        hasUpdate,
-        installedVersion,
-        hasGithubToken,
-        isDevReleasesOptedIn,
-        isLoadingSettings,
-    });
 
     const cardTitle = startupError
         ? `Update Status Unavailable`
@@ -89,6 +95,15 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
         }
     }, [updateSuccess, installedVersion, onUpdateComplete]);
 
+    const handlePrimaryAction = () => {
+        if (primaryActionInstalls) {
+            void updatePlugin();
+            return;
+        }
+
+        void checkForUpdates();
+    };
+
     return (
         <>
             <div className="space-y-6">
@@ -131,13 +146,21 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
 
                             <button
                                 className="btn-primary px-5 py-2.5 text-sm font-bold"
-                                onClick={updatePlugin}
-                                disabled={isUpdating || startupError !== null}
+                                onClick={handlePrimaryAction}
+                                disabled={isPrimaryDisabled}
                             >
-                                {isUpdating ? "Updating..." : hasUpdate ? "Install Update" : installedVersion ? "Check for Updates" : "Install Plugin"}
+                                {primaryActionLabel}
                             </button>
                         </div>
                     </div>
+
+                    {!hasGithubToken && !startupError && (
+                        <div className="mt-4 rounded-lg border border-accent-warning bg-accent-warning/10 p-3">
+                            <p className="text-sm font-semibold text-accent-warning">
+                                A GitHub access token is required to install the private plugin asset.
+                            </p>
+                        </div>
+                    )}
 
                     {isDevReleasesOptedIn && (
                         <div className="mt-4 rounded-lg border border-accent-warning bg-accent-warning/10 p-3">

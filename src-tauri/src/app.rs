@@ -5,15 +5,6 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::thread::current;
-use std::time::Duration;
-
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
-struct GitHubRelease {
-    tag_name: String,
-}
 
 #[derive(Debug)]
 pub struct AppState {
@@ -46,14 +37,10 @@ impl AppState {
 
         let _ = ensure_config_file(detected_installed_airac_version.as_deref());
 
-        let new_airac_version_available = detected_installed_airac_version
-            .as_deref()
-            .and_then(Self::check_new_airac_version_available);
-
         Self {
             euroscope_config_dir: Mutex::new(detected_euroscope_config_dir),
             installed_airac_version: Mutex::new(detected_installed_airac_version),
-            new_airac_version_available: Mutex::new(new_airac_version_available),
+            new_airac_version_available: Mutex::new(None),
             profiles: Mutex::new(profiles),
             hoppie_code: Mutex::new(hoppie_code),
             list_configs: Mutex::new(list_configs),
@@ -111,7 +98,7 @@ impl AppState {
         Some(components)
     }
 
-    fn is_latest_newer(current_version: &str, latest_version: &str) -> Option<bool> {
+    pub(crate) fn is_latest_newer(current_version: &str, latest_version: &str) -> Option<bool> {
         let current_components = Self::parse_version_components(current_version)?;
         let latest_components = Self::parse_version_components(latest_version)?;
 
@@ -131,26 +118,6 @@ impl AppState {
         }
 
         Some(false)
-    }
-
-    fn check_new_airac_version_available(current_version: &str) -> Option<bool> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .ok()?;
-
-        let release = client
-            .get("https://api.github.com/repos/vatsim-italy/VATITA-GNG-Files/releases/latest")
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "controller-pack-manager")
-            .send()
-            .ok()?
-            .error_for_status()
-            .ok()?
-            .json::<GitHubRelease>()
-            .ok()?;
-
-        Self::is_latest_newer(current_version, &release.tag_name)
     }
 
     pub fn parse_existing_profiles(euroscope_config_dir: &str) -> Option<Vec<Profile>> {

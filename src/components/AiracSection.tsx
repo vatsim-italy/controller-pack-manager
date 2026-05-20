@@ -1,6 +1,7 @@
 import { useAiracUpdate } from "../hooks/useAiracUpdate";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useEffect, useState } from "react";
 
 interface AiracSectionProps {
     installedAiracVersion: string | null;
@@ -17,6 +18,7 @@ export const AiracSection = ({
     startupError,
     onUpdateComplete
 }: AiracSectionProps) => {
+    const [hasOpenedSectorDownload, setHasOpenedSectorDownload] = useState(false);
     const {
         isUpdating,
         isImportingSectorZip,
@@ -41,13 +43,88 @@ export const AiracSection = ({
     const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "unknown";
     const cardTitle = startupError
         ? `Update Status Unavailable: AIRAC ${installedAiracVersion ?? "unknown"}`
-        : (updateSuccess || isUpToDate) // If hook succeeded OR versions match
+        : hasUpdate
+            ? `Update: AIRAC ${targetAiracVersion}`
+        : (updateSuccess || isUpToDate)
             ? `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`
+            : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+    const statusText = startupError
+        ? "AIRAC information could not be loaded."
+        : requiresSectorImport && !hasOpenedSectorDownload
+            ? "Download the AeroNav sector package, then import the ZIP here before installing."
             : requiresSectorImport
-                ? `Update Ready: Import Sector Files for AIRAC ${targetAiracVersion}`
+                ? "Import the downloaded AeroNav ZIP to unlock installation."
                 : hasUpdate
-                    ? `Update Available: AIRAC ${targetAiracVersion}`
-                    : `Up to Date: AIRAC ${installedAiracVersion ?? "unknown"}`;
+                    ? `Ready to install over AIRAC ${installedAiracVersion ?? "unknown"}.`
+                    : "Installed files match the latest GitHub release.";
+    const primaryActionLabel = isUpdating
+        ? "Installing..."
+        : isImportingSectorZip
+            ? "Importing..."
+            : requiresSectorImport && !hasOpenedSectorDownload
+                ? "Download Sector ZIP"
+                : requiresSectorImport
+                    ? "Import Sector ZIP"
+                    : hasUpdate
+                        ? "Install Update"
+                        : "Check for Updates";
+    const primaryActionClassName = requiresSectorImport
+        ? "btn-warning px-5 py-2.5 text-sm font-bold"
+        : "btn-primary px-5 py-2.5 text-sm font-bold";
+    const isPrimaryDisabled = startupError !== null || isUpdating || isImportingSectorZip;
+
+    const handlePrimaryAction = async () => {
+        console.log("[AIRAC] Primary action", {
+            hasUpdate,
+            requiresSectorImport,
+            hasOpenedSectorDownload,
+            hasImportedSectorFiles,
+            installedAiracVersion,
+            latestAiracVersion,
+            newAiracVersionAvailable,
+        });
+
+        if (requiresSectorImport && !hasOpenedSectorDownload) {
+            await openSectorDownloadPage();
+            setHasOpenedSectorDownload(true);
+            return;
+        }
+
+        if (requiresSectorImport) {
+            await importSectorZip();
+            return;
+        }
+
+        if (hasUpdate) {
+            await updateAirac();
+            setHasOpenedSectorDownload(false);
+            return;
+        }
+
+        await checkForUpdates();
+    };
+
+    useEffect(() => {
+        console.log("[AIRAC] Card state", {
+            installedAiracVersion,
+            latestAiracVersion,
+            newAiracVersionAvailable,
+            hasUpdate,
+            hasImportedSectorFiles,
+            requiresSectorImport,
+            updateSuccess,
+            primaryActionLabel,
+        });
+    }, [
+        hasImportedSectorFiles,
+        hasUpdate,
+        installedAiracVersion,
+        latestAiracVersion,
+        newAiracVersionAvailable,
+        primaryActionLabel,
+        requiresSectorImport,
+        updateSuccess,
+    ]);
 
     const formattedLastChecked = lastCheckedAt
         ? lastCheckedAt.toLocaleString([], {
@@ -76,50 +153,20 @@ export const AiracSection = ({
                         <div className="space-y-1.5">
                             <h2 className="text-xl font-bold text-white">{cardTitle}</h2>
                             <p className="text-xs text-secondary-500">Last check for updates: {formattedLastChecked}</p>
-                            {requiresSectorImport && (
-                                <p className="text-xs text-accent-warning">
-                                    Install is locked until you import the downloaded AeroNav sector zip.
-                                </p>
-                            )}
+                            <p className={requiresSectorImport ? "text-xs text-accent-warning" : "text-xs text-secondary-400"}>
+                                {statusText}
+                            </p>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 md:justify-end">
-                        {hasUpdate && (
-                            <>
-                                <button
-                                    type="button"
-                                    className="btn-secondary btn-small"
-                                    onClick={() => void openSectorDownloadPage()}
-                                    disabled={startupError !== null || isUpdating || isImportingSectorZip}
-                                >
-                                    Download Update
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className="btn-warning btn-small"
-                                    onClick={() => void importSectorZip()}
-                                    disabled={startupError !== null || isUpdating || isImportingSectorZip}
-                                >
-                                    {isImportingSectorZip ? "Importing..." : "Import Update"}
-                                </button>
-                            </>
-                        )}
-
                         <button
-                            className="btn-primary px-5 py-2.5 text-sm font-bold"
-                            onClick={hasUpdate ? updateAirac : checkForUpdates}
-                            disabled={isUpdating || startupError !== null || requiresSectorImport}
+                            className={primaryActionClassName}
+                            onClick={() => void handlePrimaryAction()}
+                            disabled={isPrimaryDisabled}
                         >
                             {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
-                            {isUpdating
-                                ? "Updating..."
-                                : requiresSectorImport
-                                    ? "Import Sector ZIP First"
-                                    : hasUpdate
-                                        ? "Install Update"
-                                        : "Check for Updates"}
+                            {primaryActionLabel}
                         </button>
                     </div>
                 </div>

@@ -8,6 +8,10 @@ pub struct ControllerPackManagerConfig {
     #[serde(default)]
     pub installed_airac_version: Option<String>,
     #[serde(default)]
+    pub installed_airac_digest: Option<String>,
+    #[serde(default)]
+    pub installed_airac_digest_source: Option<String>,
+    #[serde(default)]
     pub github_access_token: Option<String>,
     #[serde(default)]
     pub plugin_dev_releases_opt_in: bool,
