@@ -1,15 +1,14 @@
-import { ReactNode, isValidElement, useEffect } from "react";
+import { ReactNode, isValidElement } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { usePluginUpdate } from "../hooks/usePluginUpdate";
+import type { PluginUpdateState } from "../hooks/usePluginUpdate";
 
 
-interface PluginSectionProps {
+interface PluginSectionProps extends PluginUpdateState {
     startupError: string | null;
-    onUpdateComplete?: (newVersion: string | null) => void;
 }
 
-export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSectionProps) => {
+export const PluginSection = ({ startupError, ...pluginState }: PluginSectionProps) => {
     const {
         isUpdating,
         updateError,
@@ -27,7 +26,7 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
         lastCheckedAt,
         installedVersion,
         isLoadingSettings,
-    } = usePluginUpdate();
+    } = pluginState;
 
 
     const hasUpdate = Boolean(availableVersion);
@@ -88,12 +87,6 @@ export const PluginSection = ({ startupError, onUpdateComplete  }: PluginSection
 
         return "";
     };
-
-    useEffect(() => {
-        if (updateSuccess && onUpdateComplete) {
-            onUpdateComplete(installedVersion ?? null);
-        }
-    }, [updateSuccess, installedVersion, onUpdateComplete]);
 
     const handlePrimaryAction = () => {
         if (primaryActionInstalls) {

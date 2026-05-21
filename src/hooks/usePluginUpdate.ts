@@ -59,7 +59,29 @@ const normalizeError = (error: unknown): string => {
   return String(error);
 };
 
-export const usePluginUpdate = () => {
+export type PluginUpdateState = {
+  isUpdating: boolean;
+  updateError: string | null;
+  updateSuccess: boolean;
+  releases: PluginApiResponse | null;
+  isLoadingReleases: boolean;
+  fetchError: string | null;
+  changelog: string | null;
+  isLoadingChangelog: boolean;
+  changelogError: string | null;
+  hasGithubToken: boolean;
+  isDevReleasesOptedIn: boolean;
+  lastCheckedAt: Date | null;
+  installedVersion: string | null;
+  availableVersion: string | null;
+  isLoadingSettings: boolean;
+  updatePlugin: () => Promise<void>;
+  checkForUpdates: () => Promise<void>;
+  clearError: () => void;
+  toggleDevReleasesOptIn: (optIn: boolean) => Promise<void>;
+};
+
+export const usePluginUpdate = (): PluginUpdateState => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
@@ -272,6 +294,9 @@ export const usePluginUpdate = () => {
     isUpdating,
     updateError,
     updateSuccess,
+    releases,
+    isLoadingReleases,
+    fetchError,
     updatePlugin,
     checkForUpdates,
     clearError,
@@ -284,7 +309,6 @@ export const usePluginUpdate = () => {
     toggleDevReleasesOptIn,
     lastCheckedAt,
     installedVersion,
-    releases,
     isLoadingSettings,
   };
 };

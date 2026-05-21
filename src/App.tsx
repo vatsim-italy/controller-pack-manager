@@ -6,6 +6,7 @@ import { ProfilesList } from "./components/ProfilesList";
 import { HoppieSection } from "./components/HoppieSection";
 import { ListsSection } from "./components";
 import type { ListsSectionScreenConfig } from "./components/ListsSection";
+import { usePluginUpdate } from "./hooks/usePluginUpdate";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -54,7 +55,8 @@ function App(
         latest: initialLatest,
         available: initialAvailable
     });
-    const [currentPluginVersion, setCurrentPluginVersion] = useState(installedPluginVersion);
+    const pluginState = usePluginUpdate();
+    const currentPluginVersion = pluginState.installedVersion ?? installedPluginVersion;
 
 
     const refreshProfiles = async () => {
@@ -391,7 +393,7 @@ function App(
              return (
                  <PluginSection
                      startupError={startupError}
-                     onUpdateComplete={(newVersion) => setCurrentPluginVersion(newVersion)}
+                     {...pluginState}
                  />
              );
          }
