@@ -96,6 +96,14 @@ pub fn set_plugin_dev_releases_opt_in(opt_in: bool) -> Result<(), String> {
         .map(|_| ())
 }
 
+pub fn reset_cached_plugin_update_info() -> Result<(), String> {
+    update_config(|config| {
+        config.latest_plugin_version = None;
+        config.latest_plugin_digest = None;
+    })
+    .map(|_| ())
+}
+
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
     // 1. Instant Path: Trust the config.
     let config = read_config_or_default()?;
@@ -311,9 +319,9 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     update_config(|stored_config| {
         stored_config.installed_plugin_version = installed_version.clone();
         stored_config.installed_plugin_digest = installed_digest.clone();
-        // Also update cached latest to match installed (no update available anymore)
-        stored_config.latest_plugin_version = installed_version.clone();
-        stored_config.latest_plugin_digest = installed_digest.clone();
+        // Invalidate cached latest release info so the next check refreshes from the network.
+        stored_config.latest_plugin_version = None;
+        stored_config.latest_plugin_digest = None;
     }).map_err(|e| format!("failed to update config: {}", e))?;
 
     println!("[Plugin] Update completed successfully!");

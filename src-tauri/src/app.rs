@@ -1,5 +1,6 @@
 use crate::config::ensure_config_file;
 use crate::profile::Profile;
+use crate::plugin::reset_cached_plugin_update_info;
 use crate::settings::ListConfig;
 use std::env;
 use std::fs;
@@ -36,6 +37,7 @@ impl AppState {
             .and_then(Self::parse_list_configs);
 
         let _ = ensure_config_file(detected_installed_airac_version.as_deref());
+        let _ = reset_cached_plugin_update_info();
 
         Self {
             euroscope_config_dir: Mutex::new(detected_euroscope_config_dir),
