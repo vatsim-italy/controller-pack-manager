@@ -1,10 +1,10 @@
-use crate::config::ensure_config_file;
+use crate::config::{ensure_config_file, read_config_or_default, update_config};
 use crate::profile::Profile;
 use crate::plugin::reset_cached_plugin_update_info;
 use crate::settings::ListConfig;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 #[derive(Debug)]
@@ -19,7 +19,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let detected_euroscope_config_dir = Self::detect_euroscope_config_folder();
+        let detected_euroscope_config_dir = Self::resolve_euroscope_config_folder();
         let detected_installed_airac_version = detected_euroscope_config_dir
             .as_deref()
             .and_then(Self::detect_installed_airac_version);
@@ -47,6 +47,93 @@ impl AppState {
             hoppie_code: Mutex::new(hoppie_code),
             list_configs: Mutex::new(list_configs),
         }
+    }
+
+    pub fn resolve_euroscope_config_folder() -> Option<String> {
+        let configured_dir = read_config_or_default()
+            .ok()
+            .and_then(|config| config.euroscope_config_dir_override)
+            .filter(|path| Path::new(path).is_dir());
+
+        configured_dir.or_else(Self::detect_euroscope_config_folder)
+    }
+
+    fn read_euroscope_state(
+        euroscope_config_dir: Option<&str>,
+    ) -> (Option<String>, Option<Vec<Profile>>, Option<String>, Option<Vec<ListConfig>>) {
+        let installed_airac_version = euroscope_config_dir.and_then(Self::detect_installed_airac_version);
+        let profiles = euroscope_config_dir.and_then(Self::parse_existing_profiles);
+        let hoppie_code = euroscope_config_dir.and_then(Self::parse_hoppie_code);
+        let list_configs = euroscope_config_dir.and_then(Self::parse_list_configs);
+
+        (installed_airac_version, profiles, hoppie_code, list_configs)
+    }
+
+    pub fn refresh_euroscope_config_folder(
+        &self,
+        configured_dir: Option<String>,
+    ) -> Result<Option<String>, String> {
+        let resolved_dir = configured_dir
+            .as_deref()
+            .filter(|path| Path::new(path).is_dir())
+            .map(|path| path.to_string())
+            .or_else(Self::detect_euroscope_config_folder);
+
+        let (installed_airac_version, profiles, hoppie_code, list_configs) =
+            Self::read_euroscope_state(resolved_dir.as_deref());
+
+        {
+            let mut config_dir_lock = self
+                .euroscope_config_dir
+                .lock()
+                .map_err(|error| error.to_string())?;
+            *config_dir_lock = resolved_dir.clone();
+        }
+
+        {
+            let mut installed_airac_lock = self
+                .installed_airac_version
+                .lock()
+                .map_err(|error| error.to_string())?;
+            *installed_airac_lock = installed_airac_version.clone();
+        }
+
+        {
+            let mut profiles_lock = self
+                .profiles
+                .lock()
+                .map_err(|error| error.to_string())?;
+            *profiles_lock = profiles;
+        }
+
+        {
+            let mut hoppie_lock = self
+                .hoppie_code
+                .lock()
+                .map_err(|error| error.to_string())?;
+            *hoppie_lock = hoppie_code;
+        }
+
+        {
+            let mut list_configs_lock = self
+                .list_configs
+                .lock()
+                .map_err(|error| error.to_string())?;
+            *list_configs_lock = list_configs;
+        }
+
+        let _ = ensure_config_file(installed_airac_version.as_deref());
+        let _ = reset_cached_plugin_update_info();
+
+        update_config(|config| {
+            config.euroscope_config_dir_override = configured_dir;
+            config.installed_airac_version = installed_airac_version.clone();
+            config.installed_airac_digest = None;
+            config.installed_airac_digest_source = None;
+        })
+        .map_err(|error| format!("unable to store EuroScope folder override: {}", error))?;
+
+        Ok(resolved_dir)
     }
 
     fn detect_euroscope_config_folder() -> Option<String> {

@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import App from "./App";
 import "./styles/global.css";
 
@@ -134,15 +135,74 @@ root.render(
     </React.StrictMode>,
 );
 
+type FolderGateProps = {
+    startupError: string | null;
+    onFolderResolved: (path: string) => Promise<void>;
+};
+
+const FolderGate = ({ startupError, onFolderResolved }: FolderGateProps) => {
+    const [isPickingFolder, setIsPickingFolder] = React.useState(false);
+    const [actionError, setActionError] = React.useState<string | null>(null);
+
+    const pickFolder = async () => {
+        setActionError(null);
+        setIsPickingFolder(true);
+
+        try {
+            const selectedPath = await open({
+                directory: true,
+                multiple: false,
+            });
+
+            if (!selectedPath || Array.isArray(selectedPath)) {
+                return;
+            }
+
+            await onFolderResolved(selectedPath);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setIsPickingFolder(false);
+        }
+    };
+
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-secondary-700 px-4 text-secondary-100">
+            <div className="w-full max-w-md rounded-2xl border border-secondary-600 bg-secondary-800/90 p-6 shadow-2xl">
+                <h1 className="text-2xl font-semibold text-white">Where is it?</h1>
+                <p className="mt-2 text-sm leading-6 text-secondary-300">
+                    Select the EuroScope folder before the rest of the app loads.
+                </p>
+
+                {startupError && (
+                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+                        {startupError}
+                    </div>
+                )}
+
+                {actionError && (
+                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+                        {actionError}
+                    </div>
+                )}
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        className="btn-primary px-4 py-2 text-sm font-bold"
+                        onClick={pickFolder}
+                        disabled={isPickingFolder}
+                    >
+                        {isPickingFolder ? "Opening..." : "Choose Folder"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const bootstrap = async () => {
     let euroscopeConfigPath: string | null = null;
-    let installedAiracVersion: string | null = null;
-    let latestAiracVersion: string | null = null;
-    let installedPluginVersion: string | null = null;
-    let newAiracVersionAvailable: boolean | null = null;
-    let profiles: Profile[] | null = null;
-    let hoppieCode: string | null = null;
-    let listConfigs: ListConfig[] | null = null;
     let startupError: string | null = null;
 
     const captureError = (error: unknown) => {
@@ -167,47 +227,50 @@ const bootstrap = async () => {
         }
     };
 
+    const loadAndRenderApp = async (detectedEuroscopeConfigPath: string) => {
+        const [installedAiracResult, latestAiracResult, installedPluginResult, profilesResult, updateStatusResult, listConfigsResult, hoppieCodeResult] = await Promise.all([
+            readOptional<string | null>("get_detected_installed_airac_version"),
+            // Fetching the latest AIRAC version can fail due to network/GitHub issues;
+            // treat it as non-critical so the app doesn't show a startup error.
+            readNonCritical<string | null>("get_latest_airac_version"),
+            readOptional<string | null>("get_installed_plugin_version"),
+            readOptional<Profile[] | null>("get_existing_profiles"),
+            readNonCritical<boolean>("refresh_airac_update_status"),
+            readOptional<ListConfig[] | null>("get_list_configs"),
+            readOptional<string | null>("get_hoppie_code"),
+        ]);
+
+        renderApp(
+            detectedEuroscopeConfigPath,
+            installedAiracResult,
+            latestAiracResult,
+            installedPluginResult,
+            updateStatusResult,
+            profilesResult,
+            hoppieCodeResult,
+            listConfigsResult,
+            startupError
+        );
+    };
+
     euroscopeConfigPath = await readOptional<string | null>("get_detected_euroscope_config_dir");
 
-    const [
-        installedAiracResult,
-        latestAiracResult,
-        installedPluginResult,
-        profilesResult,
-        updateStatusResult,
-        listConfigsResult,
-        hoppieCodeResult,
-    ] = await Promise.all([
-        readOptional<string | null>("get_detected_installed_airac_version"),
-        // Fetching the latest AIRAC version can fail due to network/GitHub issues;
-        // treat it as non-critical so the app doesn't show a startup error.
-        readNonCritical<string | null>("get_latest_airac_version"),
-        readOptional<string | null>("get_installed_plugin_version"),
-        readOptional<Profile[] | null>("get_existing_profiles"),
-        readNonCritical<boolean>("refresh_airac_update_status"),
-        readOptional<ListConfig[] | null>("get_list_configs"),
-        readOptional<string | null>("get_hoppie_code"),
-    ]);
+    if (!euroscopeConfigPath) {
+        root.render(
+            <React.StrictMode>
+                <FolderGate
+                    startupError={startupError}
+                    onFolderResolved={async (selectedPath) => {
+                        const resolvedPath = await invoke<string | null>("set_euroscope_config_dir", { path: selectedPath });
+                        await loadAndRenderApp(resolvedPath ?? selectedPath);
+                    }}
+                />
+            </React.StrictMode>,
+        );
+        return;
+    }
 
-    installedAiracVersion = installedAiracResult;
-    latestAiracVersion = latestAiracResult;
-    installedPluginVersion = installedPluginResult;
-    profiles = profilesResult;
-    newAiracVersionAvailable = updateStatusResult;
-    listConfigs = listConfigsResult;
-    hoppieCode = hoppieCodeResult;
-
-    renderApp(
-        euroscopeConfigPath,
-        installedAiracVersion,
-        latestAiracVersion,
-        installedPluginVersion,
-        newAiracVersionAvailable,
-        profiles,
-        hoppieCode,
-        listConfigs,
-        startupError
-    );
+    await loadAndRenderApp(euroscopeConfigPath);
 };
 
 void bootstrap();

@@ -1,7 +1,5 @@
 use crate::config::{read_config_or_default, update_config};
-use crate::github_http::{
-    download_bytes, resolve_github_token,
-};
+use crate::github_http::download_bytes;
 use crate::utils::clear_directory;
 use sha2::{Sha256, Digest};
 use std::env;
@@ -219,12 +217,6 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     Ok(Some(latest_version))
 }
 
-fn require_private_repo_token() -> Result<String, String> {
-    resolve_github_token().ok_or_else(|| {
-        "missing github access token for private plugin repository. Set VATITA_GITHUB_TOKEN or store one with set_github_access_token".to_string()
-    })
-}
-
 fn calculate_file_sha256(path: &Path) -> Result<String, String> {
     let data = fs::read(path).map_err(|e| format!("unable to read file: {}", e))?;
     let mut hasher = Sha256::new();
@@ -236,7 +228,6 @@ fn calculate_file_sha256(path: &Path) -> Result<String, String> {
 fn download_latest_plugin_asset(
     download_folder: &Path,
     release: &PluginRelease,
-    token: &str,
 ) -> Result<PathBuf, String> {
     clear_directory(download_folder)?;
 
@@ -250,7 +241,7 @@ fn download_latest_plugin_asset(
     // Construct the URL based on the new pattern: api/plugin/{release_id}/{filename}
     let download_url = format!("{}/{}/{}", RELEASES_API_URL, release.id, asset.name);
 
-    let dll_bytes = download_bytes(&download_url, Some(token))?;
+    let dll_bytes = download_bytes(&download_url)?;
 
     let downloaded_dll_path = download_folder.join(PLUGIN_ASSET_NAME);
 
@@ -274,7 +265,6 @@ pub fn run_get_latest_plugin_changelog() -> Result<String, String> {
 
 pub fn run_update_plugin_version() -> Result<String, String> {
     let config = read_config_or_default()?;
-    let token = require_private_repo_token()?;
     let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
 
     let base_folder = PathBuf::from(&app_data).join("controller-pack-manager");
@@ -282,7 +272,7 @@ pub fn run_update_plugin_version() -> Result<String, String> {
 
     let release = select_release(config.plugin_dev_releases_opt_in)?;
     println!("[Plugin] Downloading version: {}", release.title);
-    let downloaded_dll_path = download_latest_plugin_asset(&download_folder, &release, &token)?;
+    let downloaded_dll_path = download_latest_plugin_asset(&download_folder, &release)?;
 
     let plugins_root = PathBuf::from(&app_data)
         .join("EuroScope")

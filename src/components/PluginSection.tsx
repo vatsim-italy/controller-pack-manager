@@ -20,7 +20,6 @@ export const PluginSection = ({ startupError, ...pluginState }: PluginSectionPro
         isLoadingChangelog,
         changelogError,
         availableVersion,
-        hasGithubToken,
         isDevReleasesOptedIn,
         toggleDevReleasesOptIn,
         lastCheckedAt,
@@ -35,12 +34,10 @@ export const PluginSection = ({ startupError, ...pluginState }: PluginSectionPro
         isUpdating ||
         isLoadingSettings ||
         startupError !== null ||
-        (primaryActionInstalls && !hasGithubToken);
+        false;
     const primaryActionLabel = isUpdating
         ? "Updating..."
-        : !hasGithubToken && primaryActionInstalls
-            ? "GitHub Token Required"
-            : hasUpdate
+        : hasUpdate
                 ? "Install Update"
                 : installedVersion
                     ? "Check for Updates"
@@ -146,14 +143,6 @@ export const PluginSection = ({ startupError, ...pluginState }: PluginSectionPro
                             </button>
                         </div>
                     </div>
-
-                    {!hasGithubToken && !startupError && (
-                        <div className="mt-4 rounded-lg border border-accent-warning bg-accent-warning/10 p-3">
-                            <p className="text-sm font-semibold text-accent-warning">
-                                A GitHub access token is required to install the private plugin asset.
-                            </p>
-                        </div>
-                    )}
 
                     {isDevReleasesOptedIn && (
                         <div className="mt-4 rounded-lg border border-accent-warning bg-accent-warning/10 p-3">

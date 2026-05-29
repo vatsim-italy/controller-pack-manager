@@ -69,7 +69,6 @@ export type PluginUpdateState = {
   changelog: string | null;
   isLoadingChangelog: boolean;
   changelogError: string | null;
-  hasGithubToken: boolean;
   isDevReleasesOptedIn: boolean;
   lastCheckedAt: Date | null;
   installedVersion: string | null;
@@ -81,14 +80,13 @@ export type PluginUpdateState = {
   toggleDevReleasesOptIn: (optIn: boolean) => Promise<void>;
 };
 
-export const usePluginUpdate = (): PluginUpdateState => {
+export const usePluginUpdate = (enabled = true): PluginUpdateState => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [releases, setReleases] = useState<PluginApiResponse | null>(pluginCache.releases);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(pluginCache.fetchError);
-  const [hasGithubToken, setHasGithubToken] = useState(false);
   const [isDevReleasesOptedIn, setIsDevReleasesOptedIn] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(readPluginCachedLastChecked());
   const [settingsReady, setSettingsReady] = useState(false);
@@ -96,12 +94,12 @@ export const usePluginUpdate = (): PluginUpdateState => {
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
-  const buildCacheKey = useCallback((tokenAvailable: boolean, devOptIn: boolean) => {
-    return `${tokenAvailable ? "1" : "0"}:${devOptIn ? "1" : "0"}`;
+  const buildCacheKey = useCallback((devOptIn: boolean) => {
+    return `${devOptIn ? "1" : "0"}`;
   }, []);
 
-  const fetchReleasesWithFlags = useCallback(async (tokenAvailable: boolean, devOptIn: boolean, force = false) => {
-    const cacheKey = buildCacheKey(tokenAvailable, devOptIn);
+  const fetchReleasesWithFlags = useCallback(async (devOptIn: boolean, force = false) => {
+    const cacheKey = buildCacheKey(devOptIn);
 
     if (!force && pluginCache.fetched && pluginCache.key === cacheKey) {
       setReleases(pluginCache.releases);
@@ -161,16 +159,14 @@ export const usePluginUpdate = (): PluginUpdateState => {
 
   const refreshSettings = useCallback(async () => {
     try {
-      const [tokenAvailable, devOptIn, installedVer] = await Promise.all([
-        invoke<boolean>("has_github_access_token"),
+      const [devOptIn, installedVer] = await Promise.all([
         invoke<boolean>("is_plugin_dev_releases_opted_in"),
         invoke<string | null>("get_installed_plugin_version"),
       ]);
 
-      setHasGithubToken(tokenAvailable);
       setIsDevReleasesOptedIn(devOptIn);
       setInstalledVersion(installedVer ?? null);
-      return { tokenAvailable, devOptIn };
+      return { devOptIn };
     } catch (error) {
       console.error("Failed to refresh settings:", error);
       throw error;
@@ -184,8 +180,8 @@ export const usePluginUpdate = (): PluginUpdateState => {
   }, []);
 
   const fetchLatestReleases = useCallback(async () => {
-    await fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn);
-  }, [fetchReleasesWithFlags, hasGithubToken, isDevReleasesOptedIn]);
+    await fetchReleasesWithFlags(isDevReleasesOptedIn);
+  }, [fetchReleasesWithFlags, isDevReleasesOptedIn]);
 
   const checkForUpdates = useCallback(async () => {
     setUpdateError(null);
@@ -193,9 +189,9 @@ export const usePluginUpdate = (): PluginUpdateState => {
     setIsLoadingReleases(true);
 
     try {
-      const { tokenAvailable, devOptIn } = await refreshSettings();
+      const { devOptIn } = await refreshSettings();
       await Promise.all([
-        fetchReleasesWithFlags(tokenAvailable, devOptIn, true),
+        fetchReleasesWithFlags(devOptIn, true),
         refreshAvailableVersion(),
       ]);
     } catch (error) {
@@ -207,6 +203,12 @@ export const usePluginUpdate = (): PluginUpdateState => {
   }, [fetchReleasesWithFlags, refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoadingSettings(false);
+      setIsLoadingReleases(false);
+      return;
+    }
+
     const loadSettings = async () => {
       setIsLoadingSettings(true);
       try {
@@ -221,15 +223,15 @@ export const usePluginUpdate = (): PluginUpdateState => {
     };
 
     void loadSettings();
-  }, [refreshAvailableVersion, refreshSettings]);
+  }, [enabled, refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
-    if (!settingsReady) {
+    if (!enabled || !settingsReady) {
       return;
     }
 
     void fetchLatestReleases();
-  }, [fetchLatestReleases, settingsReady]);
+  }, [enabled, fetchLatestReleases, settingsReady]);
 
   const toggleDevReleasesOptIn = async (optIn: boolean) => {
     setUpdateError(null);
@@ -240,7 +242,7 @@ export const usePluginUpdate = (): PluginUpdateState => {
       setUpdateSuccess(false);
 
       await Promise.all([
-        fetchReleasesWithFlags(hasGithubToken, optIn, true),
+        fetchReleasesWithFlags(optIn, true),
         refreshAvailableVersion(),
       ]);
     } catch (error) {
@@ -254,16 +256,12 @@ export const usePluginUpdate = (): PluginUpdateState => {
     setUpdateSuccess(false);
 
     try {
-      if (!hasGithubToken) {
-        throw new Error("Provide a GitHub access token before installing plugin updates.");
-      }
-
       const latestVersion = await invoke<string>("update_plugin_version");
       setUpdateSuccess(true);
       setInstalledVersion(latestVersion);
       setAvailableVersion(null);
       await Promise.all([
-        fetchReleasesWithFlags(hasGithubToken, isDevReleasesOptedIn, true),
+        fetchReleasesWithFlags(isDevReleasesOptedIn, true),
         refreshAvailableVersion(),
       ]);
     } catch (error) {
@@ -304,7 +302,6 @@ export const usePluginUpdate = (): PluginUpdateState => {
     isLoadingChangelog: isLoadingReleases,
     changelogError: fetchError,
     availableVersion,
-    hasGithubToken,
     isDevReleasesOptedIn,
     toggleDevReleasesOptIn,
     lastCheckedAt,

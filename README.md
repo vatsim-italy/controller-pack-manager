@@ -17,6 +17,7 @@ It helps you keep your EuroScope setup up to date by:
 - Installs update package content into your local EuroScope config.
 - Requires sector files to be imported before installation (safe preflight gate).
 - Opens the official AeroNav page for manual sector ZIP download.
+- Supports manually selecting a EuroScope data folder when the install is in a non-standard location.
 
 Sector files (`.sct` / `.ese`) are **not** downloaded automatically by the app, due to legal reasons.
 

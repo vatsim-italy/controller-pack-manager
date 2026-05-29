@@ -39,6 +39,13 @@ const IconCompass = () => (
     </svg>
 );
 
+const IconSettings = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6" aria-hidden>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06A2 2 0 1 1 4.07 16.8l.06-.06A1.7 1.7 0 0 0 4.46 15a1.7 1.7 0 0 0-1.56-1H2.8a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.56-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06A2 2 0 1 1 6.9 4.24l.06.06a1.7 1.7 0 0 0 1.87.34h0A1.7 1.7 0 0 0 9.84 3.08V3a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06A2 2 0 1 1 19.93 7.2l-.06.06a1.7 1.7 0 0 0-.34 1.87h0a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1.56 1Z" />
+    </svg>
+);
+
 const dashboardItems: Array<{
     id: DashboardSection;
     label: string;
@@ -88,6 +95,30 @@ export const Layout = ({ children, activeSection, onSectionChange }: LayoutProps
                             );
                         })}
                     </nav>
+
+                    <div className="border-t border-secondary-600 p-3">
+                        {(() => {
+                            const isActive = activeSection === "settings";
+
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={() => onSectionChange("settings")}
+                                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 ${
+                                        isActive
+                                            ? "bg-primary-600 text-white shadow-lg"
+                                            : "text-secondary-500 hover:bg-secondary-600 hover:text-white"
+                                    }`}
+                                >
+                                    <span aria-hidden className="text-secondary-100">
+                                        <IconSettings />
+                                    </span>
+
+                                    <span>Settings</span>
+                                </button>
+                            );
+                        })()}
+                    </div>
                 </aside>
 
                     <main className="flex-1 overflow-y-auto px-6 py-5">

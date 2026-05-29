@@ -4,7 +4,6 @@ use crate::airac::{
     run_update_airac_version,
 };
 use crate::config::{read_config_or_default, update_config};
-use crate::github_http::{clear_stored_github_token, resolve_github_token, store_github_token};
 use crate::plugin::{
     get_installed_plugin_version as read_installed_plugin_version,
     get_latest_plugin_installable_version as read_latest_plugin_installable_version,
@@ -324,21 +323,6 @@ pub async fn update_plugin_version() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn set_github_access_token(token: String) -> Result<(), String> {
-    store_github_token(&token)
-}
-
-#[tauri::command]
-pub fn clear_github_access_token() -> Result<(), String> {
-    clear_stored_github_token()
-}
-
-#[tauri::command]
-pub fn has_github_access_token() -> Result<bool, String> {
-    Ok(resolve_github_token().is_some())
-}
-
-#[tauri::command]
 pub fn is_plugin_dev_releases_opted_in() -> Result<bool, String> {
     read_plugin_dev_releases_opt_in()
 }
@@ -361,6 +345,30 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
 #[tauri::command]
 pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String> {
     read_latest_plugin_installable_version()
+}
+
+#[tauri::command]
+pub fn set_euroscope_config_dir(
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let normalized = path.trim().to_string();
+    if normalized.is_empty() {
+        return Err("euroscope config folder cannot be empty".to_string());
+    }
+
+    if !std::path::Path::new(&normalized).is_dir() {
+        return Err(format!("euroscope config folder does not exist: {}", normalized));
+    }
+
+    state.refresh_euroscope_config_folder(Some(normalized))
+}
+
+#[tauri::command]
+pub fn clear_euroscope_config_dir_override(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    state.refresh_euroscope_config_folder(None)
 }
 
 #[tauri::command]

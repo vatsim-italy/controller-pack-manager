@@ -1,5 +1,6 @@
 import { Profile, ListConfig, ScreenConfig, ControllerListConfig, MetarListConfig } from "./main";
 import { Layout } from "./components/Layout";
+import { ConfigSection } from "./components/ConfigSection";
 import { PluginSection } from "./components/PluginSection";
 import { AiracSection } from "./components/AiracSection";
 import { ProfilesList } from "./components/ProfilesList";
@@ -9,8 +10,9 @@ import type { ListsSectionScreenConfig } from "./components/ListsSection";
 import { usePluginUpdate } from "./hooks/usePluginUpdate";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
-export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists";
+export type DashboardSection = "sector-file" | "plugin" | "profiles" | "topsky" | "lists" | "settings";
 
 type AppProps = {
     euroscopeConfigPath: string | null;
@@ -39,10 +41,17 @@ function App(
 ) {
     const [activeSection, setActiveSection] = useState<DashboardSection>("sector-file");
     const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null);
+    const [euroscopeConfigPathState, setEuroscopeConfigPathState] = useState<string | null>(euroscopeConfigPath);
     const [appProfiles, setAppProfiles] = useState<Profile[] | null>(profiles);
+    const [appHoppieCode, setAppHoppieCode] = useState<string | null>(hoppieCode);
+    const [appListConfigs, setAppListConfigs] = useState<ListConfig[] | null>(listConfigs);
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [hasShownMissingSettingsModal, setHasShownMissingSettingsModal] = useState(false);
+    const [isMissingSettingsModalOpen, setIsMissingSettingsModalOpen] = useState(false);
+    const [isPickingFolder, setIsPickingFolder] = useState(false);
+    const [folderActionError, setFolderActionError] = useState<string | null>(null);
     const [loadedConfigs, setLoadedConfigs] = useState<ListConfig[] | null>(null);
     const [loadedControllerList, setLoadedControllerList] = useState<ControllerListConfig | null>(null);
     const [loadedMetarList, setLoadedMetarList] = useState<MetarListConfig | null>(null);
@@ -55,39 +64,127 @@ function App(
         latest: initialLatest,
         available: initialAvailable
     });
-    const pluginState = usePluginUpdate();
+    const pluginState = usePluginUpdate(Boolean(euroscopeConfigPathState));
     const currentPluginVersion = pluginState.installedVersion ?? installedPluginVersion;
 
 
-    const refreshProfiles = async () => {
-        try {
-            const updatedProfiles = await invoke<Profile[] | null>("get_existing_profiles");
-            if (updatedProfiles) {
-                setAppProfiles((previousProfiles) => {
-                    const screenConfigByName = new Map(
-                        (previousProfiles ?? [])
-                            .filter((profile) => profile.screenConfig)
-                            .map((profile) => [profile.name, profile.screenConfig])
-                    );
+    const refreshEuroScopeData = useCallback(async (resolvedPath: string | null) => {
+        setEuroscopeConfigPathState(resolvedPath);
+        setLoadedConfigs(null);
+        setLoadedControllerList(null);
+        setLoadedMetarList(null);
 
-                    return updatedProfiles.map((profile) => ({
-                        ...profile,
-                        screenConfig: profile.screenConfig ?? screenConfigByName.get(profile.name) ?? null,
-                    }));
-                });
-            }
-        } catch (error) {
-            console.error("Failed to refresh profiles:", error);
+        if (!resolvedPath) {
+            setAiracState((previousState) => ({
+                ...previousState,
+                installed: null,
+                latest: null,
+                available: null,
+            }));
+            setAppProfiles(null);
+            setAppHoppieCode(null);
+            setAppListConfigs(null);
+            setSelectedProfileName(null);
+            return;
         }
-    };
+
+        try {
+            const [installedAiracVersion, latestAiracVersion, available, profilesValue, hoppieCodeValue, listConfigsValue] = await Promise.all([
+                invoke<string | null>("get_detected_installed_airac_version"),
+                invoke<string | null>("get_latest_airac_version"),
+                invoke<boolean>("refresh_airac_update_status"),
+                invoke<Profile[] | null>("get_existing_profiles"),
+                invoke<string | null>("get_hoppie_code"),
+                invoke<ListConfig[] | null>("get_list_configs"),
+            ]);
+
+            setAiracState((previousState) => ({
+                ...previousState,
+                installed: installedAiracVersion,
+                latest: latestAiracVersion,
+                available,
+            }));
+            setAppProfiles(profilesValue);
+            setAppHoppieCode(hoppieCodeValue);
+            setAppListConfigs(listConfigsValue);
+            setSelectedProfileName((currentSelection) => {
+                if (!profilesValue || profilesValue.length === 0) {
+                    return null;
+                }
+
+                if (currentSelection && profilesValue.some((profile) => profile.name === currentSelection)) {
+                    return currentSelection;
+                }
+
+                return profilesValue[0].name;
+            });
+        } catch (error) {
+            console.error("Failed to refresh EuroScope data:", error);
+        }
+    }, []);
+
+    const chooseEuroScopeFolder = useCallback(async () => {
+        setFolderActionError(null);
+        setIsPickingFolder(true);
+
+        try {
+            const selectedPath = await open({
+                directory: true,
+                multiple: false,
+                defaultPath: euroscopeConfigPathState ?? undefined,
+            });
+
+            if (!selectedPath || Array.isArray(selectedPath)) {
+                return;
+            }
+
+            const resolvedPath = await invoke<string | null>("set_euroscope_config_dir", { path: selectedPath });
+            await refreshEuroScopeData(resolvedPath ?? selectedPath);
+            setIsMissingSettingsModalOpen(false);
+            setHasShownMissingSettingsModal(true);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setFolderActionError(message);
+        } finally {
+            setIsPickingFolder(false);
+        }
+    }, [euroscopeConfigPathState, refreshEuroScopeData]);
+
+    const resetEuroScopeFolder = useCallback(async () => {
+        setFolderActionError(null);
+        setIsPickingFolder(true);
+
+        try {
+            const resolvedPath = await invoke<string | null>("clear_euroscope_config_dir_override");
+            await refreshEuroScopeData(resolvedPath);
+            setIsMissingSettingsModalOpen(false);
+            setHasShownMissingSettingsModal(true);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setFolderActionError(message);
+        } finally {
+            setIsPickingFolder(false);
+        }
+    }, [refreshEuroScopeData]);
 
     const handleProfilesUpdate = async (updatedProfiles?: Profile[] | null) => {
         if (updatedProfiles) {
             setAppProfiles(updatedProfiles);
+            setSelectedProfileName((currentSelection) => {
+                if (!updatedProfiles.length) {
+                    return null;
+                }
+
+                if (currentSelection && updatedProfiles.some((profile) => profile.name === currentSelection)) {
+                    return currentSelection;
+                }
+
+                return updatedProfiles[0].name;
+            });
             return;
         }
 
-        await refreshProfiles();
+        await refreshEuroScopeData(euroscopeConfigPathState);
     };
 
     const handleSaveLayout = async () => {
@@ -324,6 +421,15 @@ function App(
         }
     }, [activeSection, selectedProfileName, appProfiles]);
 
+    useEffect(() => {
+        if (euroscopeConfigPathState || hasShownMissingSettingsModal) {
+            return;
+        }
+
+        setIsMissingSettingsModalOpen(true);
+        setHasShownMissingSettingsModal(true);
+    }, [euroscopeConfigPathState, hasShownMissingSettingsModal]);
+
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
             "sector-file": {
@@ -345,6 +451,10 @@ function App(
             lists: {
                 title: "Lists",
                 subtitle: "Compose and position EuroScope-style lists on a radar screen preview.",
+            },
+            settings: {
+                title: "Settings",
+                subtitle: "Choose where EuroScope stores its files and override auto-detection if needed.",
             },
         };
 
@@ -402,7 +512,7 @@ function App(
             return (
                 <ProfilesList
                     profiles={appProfiles}
-                    euroscopeConfigPath={euroscopeConfigPath}
+                    euroscopeConfigPath={euroscopeConfigPathState}
                     selectedProfileName={selectedProfileName}
                     onSelectProfileName={setSelectedProfileName}
                     onProfilesUpdate={handleProfilesUpdate}
@@ -410,10 +520,23 @@ function App(
             );
         }
 
+        if (activeSection === "settings") {
+            return (
+                <ConfigSection
+                    euroscopeConfigPath={euroscopeConfigPathState}
+                    startupError={startupError}
+                    isPickingFolder={isPickingFolder}
+                    folderActionError={folderActionError}
+                    onChooseFolder={chooseEuroScopeFolder}
+                    onResetFolder={resetEuroScopeFolder}
+                />
+            );
+        }
+
         if (activeSection === "lists") {
             return (
                 <ListsSection
-                    listConfigs={listConfigs}
+                    listConfigs={appListConfigs}
                     resumeLayout={loadedConfigs}
                     controllerListConfig={loadedControllerList}
                     metarListConfig={loadedMetarList}
@@ -426,7 +549,7 @@ function App(
             );
         }
 
-        return <HoppieSection hoppieCode={hoppieCode} />;
+        return <HoppieSection hoppieCode={appHoppieCode} />;
     };
 
     return (
@@ -491,6 +614,42 @@ function App(
                     </div>
                     <p className="mt-1 text-sm text-secondary-500">{sectionMeta.subtitle}</p>
                 </section>
+
+                {isMissingSettingsModalOpen && !euroscopeConfigPathState && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
+                        <div className="w-full max-w-md rounded-2xl border border-secondary-600 bg-secondary-700 p-6 shadow-2xl">
+                            <h2 className="text-xl font-semibold text-white">Where is it?</h2>
+                            <p className="mt-2 text-sm text-secondary-400">
+                                Please select the EuroScope folder to continue.
+                            </p>
+
+                            <div className="mt-5 flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    className="btn-primary px-4 py-2 text-sm font-bold"
+                                    onClick={chooseEuroScopeFolder}
+                                    disabled={isPickingFolder}
+                                >
+                                    {isPickingFolder ? "Opening..." : "Choose Folder"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-secondary px-4 py-2 text-sm font-bold"
+                                    onClick={() => setIsMissingSettingsModalOpen(false)}
+                                    disabled={isPickingFolder}
+                                >
+                                    Not Now
+                                </button>
+                            </div>
+
+                            {folderActionError && (
+                                <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
+                                    {folderActionError}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="pb-6">
                     {renderSection()}

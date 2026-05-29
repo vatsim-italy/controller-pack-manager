@@ -12,7 +12,7 @@ pub struct ControllerPackManagerConfig {
     #[serde(default)]
     pub installed_airac_digest_source: Option<String>,
     #[serde(default)]
-    pub github_access_token: Option<String>,
+    pub euroscope_config_dir_override: Option<String>,
     #[serde(default)]
     pub plugin_dev_releases_opt_in: bool,
     #[serde(default)]

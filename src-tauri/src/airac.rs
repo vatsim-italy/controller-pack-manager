@@ -253,7 +253,7 @@ fn download_and_extract_latest_release_with_version(
 ) -> Result<(String, String), String> {
     clear_directory(download_folder)?;
 
-    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL)?;
     let latest_version = release.tag_name.trim().to_string();
     if latest_version.is_empty() {
         return Err("latest AIRAC release tag is empty".to_string());
@@ -268,7 +268,7 @@ fn download_and_extract_latest_release_with_version(
 
     let changelog = release.body.clone();
 
-    let zip_bytes = download_bytes(&download_url, None)?;
+    let zip_bytes = download_bytes(&download_url)?;
 
     let reader = std::io::Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(reader)
@@ -342,7 +342,7 @@ fn normalize_hash_file_content(content: &str) -> Result<String, String> {
 }
 
 fn fetch_main_branch_airac_digest() -> Result<String, String> {
-    let hash_bytes = download_bytes(MAIN_BRANCH_HASH_URL, None)?;
+    let hash_bytes = download_bytes(MAIN_BRANCH_HASH_URL)?;
     let hash_content = String::from_utf8(hash_bytes)
         .map_err(|error| format!("hash.txt is not valid UTF-8: {}", error))?;
     normalize_hash_file_content(&hash_content)
@@ -379,12 +379,12 @@ fn write_airac_version_file(destination_lixx: &Path, latest_version: &str) -> Re
 }
 
 pub fn run_get_latest_airac_changelog() -> Result<String, String> {
-    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL)?;
     Ok(release.body)
 }
 
 pub fn run_get_latest_airac_version() -> Result<String, String> {
-    let release = fetch_latest_release(LATEST_RELEASE_API_URL, None)?;
+    let release = fetch_latest_release(LATEST_RELEASE_API_URL)?;
     let version = release.tag_name.trim();
 
     if version.is_empty() {
