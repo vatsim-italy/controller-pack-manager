@@ -11,13 +11,86 @@ interface AiracSectionProps {
     onUpdateComplete?: () => void;
 }
 
+// ─── sub-components ───────────────────────────────────────────────────────────
+
+const MetricTile = ({
+                        label,
+                        value,
+                        valueClassName = "text-white",
+                    }: {
+    label: string;
+    value: string;
+    valueClassName?: string;
+}) => (
+    <div className="rounded-lg bg-secondary-700/50 px-3 py-2.5">
+        <div className="mb-1 text-xs text-secondary-500">{label}</div>
+        <div className={`text-sm font-semibold ${valueClassName}`}>{value}</div>
+    </div>
+);
+
+const InlineAlert = ({
+                         kind,
+                         title,
+                         message,
+                         onDismiss,
+                     }: {
+    kind: "danger" | "success" | "warning";
+    title: string;
+    message: string;
+    onDismiss?: () => void;
+}) => {
+    const styles = {
+        danger: {
+            wrapper: "bg-accent-danger/10 border-t border-accent-danger/30",
+            icon: "text-accent-danger",
+            title: "text-accent-danger",
+        },
+        success: {
+            wrapper: "bg-green-600/10 border-t border-green-600/30",
+            icon: "text-green-400",
+            title: "text-green-400",
+        },
+        warning: {
+            wrapper: "bg-accent-warning/10 border-t border-accent-warning/30",
+            icon: "text-accent-warning",
+            title: "text-accent-warning",
+        },
+    }[kind];
+
+    const icon = kind === "danger" ? "⚠" : kind === "success" ? "✓" : "⚠";
+
+    return (
+        <div className={`flex items-start gap-3 px-5 py-3 ${styles.wrapper}`}>
+            <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${styles.icon}`}>
+                {icon}
+            </span>
+            <div className="flex-1 min-w-0">
+                <div className={`text-sm font-semibold ${styles.title}`}>{title}</div>
+                <div className="mt-0.5 text-xs text-secondary-400">{message}</div>
+            </div>
+            {onDismiss && (
+                <button
+                    type="button"
+                    onClick={onDismiss}
+                    className="flex-shrink-0 text-secondary-500 hover:text-secondary-300 transition-colors text-xs"
+                    aria-label="Dismiss"
+                >
+                    ✕
+                </button>
+            )}
+        </div>
+    );
+};
+
+// ─── main component ───────────────────────────────────────────────────────────
+
 export const AiracSection = ({
-    installedAiracVersion,
-    latestAiracVersion,
-    newAiracVersionAvailable,
-    startupError,
-    onUpdateComplete
-}: AiracSectionProps) => {
+                                 installedAiracVersion,
+                                 latestAiracVersion,
+                                 newAiracVersionAvailable,
+                                 startupError,
+                                 onUpdateComplete,
+                             }: AiracSectionProps) => {
     const [hasOpenedSectorDownload, setHasOpenedSectorDownload] = useState(false);
     const {
         isUpdating,
@@ -40,28 +113,37 @@ export const AiracSection = ({
     const hasUpdate = newAiracVersionAvailable === true && !updateSuccess;
     const isUpToDate = installedAiracVersion === latestAiracVersion && latestAiracVersion !== null;
     const isInstalled = !!installedAiracVersion;
-    const installedDisplay = installedAiracVersion ?? "Not installed";
     const requiresSectorImport = !hasImportedSectorFiles && (hasUpdate || !isInstalled);
-    const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "Not installed";
-    const cardTitle = startupError
-        ? `Update Status Unavailable: AIRAC ${installedDisplay}`
-        : !isInstalled
-            ? `Not Installed`
-        : hasUpdate
-            ? `Update: AIRAC ${targetAiracVersion}`
-        : (updateSuccess || isUpToDate)
-            ? `Up to Date: AIRAC ${installedDisplay}`
-            : `Up to Date: AIRAC ${installedDisplay}`;
-    const statusText = startupError
-        ? "AIRAC information could not be loaded."
+    const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "—";
+
+    const installedDisplay = installedAiracVersion ?? "Not installed";
+    const availableDisplay = latestAiracVersion ?? "—";
+
+    const statusDotClass = startupError
+        ? "bg-accent-danger"
+        : requiresSectorImport
+            ? "bg-accent-warning"
+            : hasUpdate
+                ? "bg-accent-warning"
+                : isInstalled
+                    ? "bg-green-500"
+                    : "bg-secondary-500";
+
+    const statusLabel = startupError
+        ? "AIRAC status unavailable"
         : requiresSectorImport && !hasOpenedSectorDownload
-            ? "Download the AeroNav sector package, then import the ZIP here before installing."
+            ? "Sector package required — download before installing"
             : requiresSectorImport
-                ? "Import the downloaded AeroNav ZIP to unlock installation."
+                ? "Import the downloaded AeroNav ZIP to continue"
                 : hasUpdate
-                    ? (isInstalled ? `Ready to install over AIRAC ${installedDisplay}.` : "Ready to install (not currently installed).")
-                    : (isInstalled ? "Installed files match the latest GitHub release." : "No AIRAC files detected.");
-    const primaryActionLabel = isUpdating
+                    ? `Update available — AIRAC ${targetAiracVersion}`
+                    : isUpToDate || updateSuccess
+                        ? `Up to date — AIRAC ${installedDisplay}`
+                        : isInstalled
+                            ? `Installed — AIRAC ${installedDisplay}`
+                            : "Not installed";
+
+    const primaryLabel = isUpdating
         ? "Installing..."
         : isImportingSectorZip
             ? "Importing..."
@@ -74,45 +156,41 @@ export const AiracSection = ({
                         : !isInstalled
                             ? "Install"
                             : "Check for Updates";
-    const primaryActionClassName = requiresSectorImport
-        ? "btn-warning px-5 py-2.5 text-sm font-bold"
-        : "btn-primary px-5 py-2.5 text-sm font-bold";
+
     const isPrimaryDisabled = startupError !== null || isUpdating || isImportingSectorZip;
 
-    const handlePrimaryAction = async () => {
-        console.log("[AIRAC] Primary action", {
-            hasUpdate,
-            requiresSectorImport,
-            hasOpenedSectorDownload,
-            hasImportedSectorFiles,
-            installedAiracVersion,
-            latestAiracVersion,
-            newAiracVersionAvailable,
-        });
+    const primaryClassName = requiresSectorImport
+        ? "btn-warning btn-small disabled:opacity-40 disabled:cursor-not-allowed"
+        : "btn-primary btn-small disabled:opacity-40 disabled:cursor-not-allowed";
 
+    const formattedLastChecked = lastCheckedAt
+        ? lastCheckedAt.toLocaleString([], {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+        : "Never";
+
+    const changelogBadge = targetAiracVersion !== "—"
+        ? `AIRAC ${targetAiracVersion}`
+        : "Release notes";
+
+    const handlePrimaryAction = async () => {
         if (requiresSectorImport && !hasOpenedSectorDownload) {
             await openSectorDownloadPage();
             setHasOpenedSectorDownload(true);
             return;
         }
-
         if (requiresSectorImport) {
             await importSectorZip();
             return;
         }
-
-        if (hasUpdate) {
+        if (hasUpdate || !isInstalled) {
             await updateAirac();
             setHasOpenedSectorDownload(false);
             return;
         }
-
-        if (!isInstalled) {
-            await updateAirac();
-            setHasOpenedSectorDownload(false);
-            return;
-        }
-
         await checkForUpdates();
     };
 
@@ -125,7 +203,7 @@ export const AiracSection = ({
             hasImportedSectorFiles,
             requiresSectorImport,
             updateSuccess,
-            primaryActionLabel,
+            primaryLabel,
         });
     }, [
         hasImportedSectorFiles,
@@ -133,160 +211,127 @@ export const AiracSection = ({
         installedAiracVersion,
         latestAiracVersion,
         newAiracVersionAvailable,
-        primaryActionLabel,
+        primaryLabel,
         requiresSectorImport,
         updateSuccess,
     ]);
 
-    const formattedLastChecked = lastCheckedAt
-        ? lastCheckedAt.toLocaleString([], {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-        : "Never";
-
-    const changelogVersion = latestAiracVersion ?? installedAiracVersion ?? "Not installed";
-
     return (
         <div className="space-y-6">
-            <section className="rounded-xl border border-secondary-600 bg-dark-header p-6 shadow-md">
-                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-secondary-600 bg-secondary-700">
-                            {startupError ? (
-                                <span className="text-2xl text-accent-danger">⚠</span>
-                            ) : !isInstalled ? (
-                                <span className="text-2xl text-primary-600">⬇</span>
-                            ) : hasUpdate ? (
-                                <span className="text-2xl text-accent-warning">↻</span>
-                            ) : (
-                                <span className="text-2xl text-accent-success">✓</span>
-                            )}
-                        </div>
 
-                        <div className="space-y-1.5">
-                            <h2 className="text-xl font-bold text-white">{cardTitle}</h2>
-                            <p className="text-xs text-secondary-500">Last check for updates: {formattedLastChecked}</p>
-                            <p className={requiresSectorImport ? "text-xs text-accent-warning" : "text-xs text-secondary-400"}>
-                                {statusText}
-                            </p>
-                        </div>
+            {/* ── status card ── */}
+            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
+
+                {/* status bar */}
+                <div className="flex items-center gap-3 border-b border-secondary-600 px-5 py-3.5">
+                    <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDotClass}`} />
+                    <span className="flex-1 text-sm font-semibold text-white">{statusLabel}</span>
+                    <span className="text-xs text-secondary-500">
+                        Last checked: {formattedLastChecked}
+                    </span>
+                </div>
+
+                {/* body */}
+                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+
+                    {/* version tiles */}
+                    <div className="grid grid-cols-2 gap-2 flex-1 min-w-[200px]">
+                        <MetricTile label="Installed" value={installedDisplay} />
+                        <MetricTile
+                            label="Available"
+                            value={availableDisplay}
+                            valueClassName={hasUpdate ? "text-accent-warning" : "text-secondary-500"}
+                        />
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                    {/* action */}
+                    <div className="flex flex-col items-end gap-2">
                         <button
-                            className={primaryActionClassName}
-                            onClick={() => void handlePrimaryAction()}
+                            type="button"
                             disabled={isPrimaryDisabled}
+                            onClick={() => void handlePrimaryAction()}
+                            className={primaryClassName}
                         >
-                            {isUpdating && <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>}
-                            {primaryActionLabel}
+                            {isUpdating && (
+                                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            )}
+                            {primaryLabel}
                         </button>
                     </div>
                 </div>
 
+                {/* sector import notice */}
+                {requiresSectorImport && !startupError && (
+                    <div className="mx-5 mb-4 rounded-lg border border-accent-warning/40 bg-accent-warning/10 px-4 py-3">
+                        <p className="text-xs font-semibold text-accent-warning">
+                            {hasOpenedSectorDownload
+                                ? "Import the AeroNav ZIP you just downloaded to continue."
+                                : "A sector package is required before installation. Download it first."}
+                        </p>
+                    </div>
+                )}
+
+                {/* alerts */}
                 {startupError && (
-                    <div className="mt-4 alert alert-error">
-                        <div className="alert-icon">❌</div>
-                        <div className="alert-content">
-                            <div className="alert-title">Unable to Load</div>
-                            <div className="alert-message">
-                                AIRAC information could not be loaded due to a startup error.
-                            </div>
-                        </div>
-                    </div>
+                    <InlineAlert
+                        kind="danger"
+                        title="Unable to load"
+                        message="AIRAC information could not be loaded due to a startup error."
+                    />
                 )}
-
                 {sectorImportError && (
-                    <div className="mt-4 alert alert-error">
-                        <div className="alert-icon">❌</div>
-                        <div className="alert-content">
-                            <div className="alert-title">Sector Import Failed</div>
-                            <div className="alert-message">{sectorImportError}</div>
-                        </div>
-                        <button
-                            className="btn-secondary btn-small mt-2"
-                            onClick={clearError}
-                        >
-                            Dismiss
-                        </button>
-                    </div>
+                    <InlineAlert
+                        kind="danger"
+                        title="Sector import failed"
+                        message={sectorImportError}
+                        onDismiss={clearError}
+                    />
                 )}
-
                 {sectorImportSuccess && (
-                    <div className="mt-4 alert alert-success">
-                        <div className="alert-icon">✅</div>
-                        <div className="alert-content">
-                            <div className="alert-title">Sector Files Imported</div>
-                            <div className="alert-message">{sectorImportSuccess}</div>
-                        </div>
-                    </div>
+                    <InlineAlert
+                        kind="success"
+                        title="Sector files imported"
+                        message={sectorImportSuccess}
+                    />
                 )}
-
                 {updateError && (
-                    <div className="mt-4 alert alert-error">
-                        <div className="alert-icon">❌</div>
-                        <div className="alert-content">
-                            <div className="alert-title">Update Failed</div>
-                            <div className="alert-message">{updateError}</div>
-                        </div>
-                        <button
-                            className="btn-secondary btn-small mt-2"
-                            onClick={clearError}
-                        >
-                            Dismiss
-                        </button>
-                    </div>
+                    <InlineAlert
+                        kind="danger"
+                        title="Update failed"
+                        message={updateError}
+                        onDismiss={clearError}
+                    />
                 )}
-
                 {updateSuccess && (
-                    <div className="mt-4 alert alert-success">
-                        <div className="alert-icon">✅</div>
-                        <div className="alert-content">
-                            <div className="alert-title">Update Completed</div>
-                            <div className="alert-message">
-                                AIRAC version has been successfully updated.
-                            </div>
-                        </div>
-                    </div>
+                    <InlineAlert
+                        kind="success"
+                        title="Update complete"
+                        message="AIRAC files have been successfully updated."
+                    />
                 )}
             </section>
 
-            <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-lg font-bold text-white">
-                        <span className="text-primary-600">↺</span>
-                        <span>Detailed Changelog</span>
-                    </h3>
+            {/* ── changelog card ── */}
+            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
+                <div className="flex items-center justify-between border-b border-secondary-600 bg-secondary-700/40 px-5 py-3.5">
+                    <span className="text-sm font-semibold text-white">Changelog</span>
+                    <span className="rounded-md border border-secondary-600 bg-secondary-700 px-2 py-0.5 text-xs text-secondary-400">
+                        {changelogBadge}
+                    </span>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-secondary-600 bg-dark-header shadow-sm">
-                    <div className="flex items-center justify-between border-b border-secondary-600 bg-secondary-700/50 p-6">
-                        <span className="font-bold uppercase tracking-tight text-white">
-                            Version {changelogVersion}
-                        </span>
-                        <span className="text-xs font-medium text-secondary-500">
-                            Latest release notes
-                        </span>
-                    </div>
-
-                    <div className="custom-scrollbar max-h-96 overflow-y-auto p-6">
-                        {isLoadingChangelog ? (
-                            <p className="text-sm text-secondary-500">Loading latest release notes…</p>
-                        ) : changelog ? (
-                            <div className="markdown-content">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {changelog}
-                                </ReactMarkdown>
-                            </div>
-                        ) : (
-                            <p className="text-sm text-secondary-500">
-                                No changelog is available for this release.
-                            </p>
-                        )}
-                    </div>
+                <div className="custom-scrollbar max-h-96 overflow-y-auto px-5 py-4">
+                    {isLoadingChangelog ? (
+                        <p className="text-sm text-secondary-500">Loading release notes…</p>
+                    ) : changelog ? (
+                        <div className="markdown-content">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{changelog}</ReactMarkdown>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-secondary-500">
+                            No changelog available for this release.
+                        </p>
+                    )}
                 </div>
             </section>
         </div>
