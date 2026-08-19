@@ -181,6 +181,7 @@ export const PluginSection = ({ startupError, ...pluginState }: PluginSectionPro
 
     return (
         <div className="space-y-6">
+            {/* ── status card ── */}
 
             {/* ── status card ── */}
             <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">

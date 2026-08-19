@@ -21,7 +21,8 @@ pub struct Artifact {
 pub struct PluginRelease {
     pub id: u64,
     pub title: String,
-    pub changelog: String,
+    #[serde(default)]
+    pub changelog: Option<String>,
     pub artifacts: Vec<Artifact>,
 }
 
@@ -90,8 +91,10 @@ pub fn get_plugin_dev_releases_opt_in() -> Result<bool, String> {
 pub fn set_plugin_dev_releases_opt_in(opt_in: bool) -> Result<(), String> {
     update_config(|config| {
         config.plugin_dev_releases_opt_in = opt_in;
+        config.latest_plugin_version = None;
+        config.latest_plugin_digest = None;
     })
-        .map(|_| ())
+    .map(|_| ())
 }
 
 pub fn reset_cached_plugin_update_info() -> Result<(), String> {
@@ -102,44 +105,105 @@ pub fn reset_cached_plugin_update_info() -> Result<(), String> {
     .map(|_| ())
 }
 
-pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
-    // 1. Instant Path: Trust the config.
-    let config = read_config_or_default()?;
-    if let Some(version) = config.installed_plugin_version {
-        // Return immediately if we already have a saved version
-        return Ok(Some(version));
-    }
+fn digests_match(d1: &str, d2: &str) -> bool {
+    let clean1 = d1.trim().trim_start_matches("sha256:");
+    let clean2 = d2.trim().trim_start_matches("sha256:");
+    clean1.eq_ignore_ascii_case(clean2)
+}
 
-    // 2. Fallback Path: Only do this if config is missing (e.g., first run or manual delete)
+pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
     let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
     let plugin_path = PathBuf::from(&app_data)
         .join("EuroScope/LIXX/Plugins")
         .join(PLUGIN_FOLDER_NAME)
         .join(PLUGIN_ASSET_NAME);
 
+    // 1. Check physical file existence. If missing, clear stale config and return None.
     if !plugin_path.exists() {
+        let config = read_config_or_default()?;
+        if config.installed_plugin_version.is_some() || config.installed_plugin_digest.is_some() {
+            let _ = update_config(|stored_config| {
+                stored_config.installed_plugin_version = None;
+                stored_config.installed_plugin_digest = None;
+            });
+        }
         return Ok(None);
     }
 
-    // Perform the heavy lifting once
+    let config = read_config_or_default()?;
     let calculated_digest = calculate_file_sha256(&plugin_path)?;
+
+    println!("[Plugin] Calculated local file digest: {}", calculated_digest);
+    println!("[Plugin] Stored config digest: {:?}", config.installed_plugin_digest);
+    println!("[Plugin] Stored config version: {:?}", config.installed_plugin_version);
+
+    // 2. Fast Path: Trust saved version ONLY if stored digest matches physical file AND stored version is a resolved version string (not "installed" or "unknown")
+    if let (Some(stored_digest), Some(stored_version)) = (
+        config.installed_plugin_digest.as_ref(),
+        config.installed_plugin_version.as_ref(),
+    ) {
+        if digests_match(stored_digest, &calculated_digest)
+            && stored_version != "installed"
+            && stored_version != "unknown"
+        {
+            println!("[Plugin] Fast-path hit: stored digest matches local file. Version: {}", stored_version);
+            return Ok(Some(stored_version.clone()));
+        }
+    }
+
+    // 3. Fallback / Re-verify Path: Match digest against API history, latest, and dev
+    println!("[Plugin] Fetching API releases to match local digest '{}'...", calculated_digest);
     let releases = fetch_releases()?;
 
+    for h in &releases.history {
+        let is_match = digests_match(&h.digest, &calculated_digest);
+        println!(
+            "[Plugin]   Comparing against history: version='{}', digest='{}' -> match={}",
+            h.name, h.digest, is_match
+        );
+    }
+
+    for a in &releases.latest.artifacts {
+        if let Some(d) = &a.digest {
+            let is_match = digests_match(d, &calculated_digest);
+            println!(
+                "[Plugin]   Comparing against latest artifact: name='{}', title='{}', digest='{}' -> match={}",
+                a.name, releases.latest.title, d, is_match
+            );
+        }
+    }
+
+    if let Some(dev) = releases.dev.as_ref() {
+        for a in &dev.artifacts {
+            if let Some(d) = &a.digest {
+                let is_match = digests_match(d, &calculated_digest);
+                println!(
+                    "[Plugin]   Comparing against dev artifact: name='{}', title='{}', digest='{}' -> match={}",
+                    a.name, dev.title, d, is_match
+                );
+            }
+        }
+    }
+
     let version_name = releases.history.iter()
-        .find(|h| h.digest == calculated_digest)
+        .find(|h| digests_match(&h.digest, &calculated_digest))
         .map(|h| h.name.clone())
         .or_else(|| {
-            // Check latest/dev if not in history
-            if let Some(asset) = find_release_asset(&releases.latest) {
-                if asset.digest.as_ref() == Some(&calculated_digest) {
-                    return Some(releases.latest.title.clone());
+            if releases.latest.artifacts.iter().any(|a| a.digest.as_ref().is_some_and(|d| digests_match(d, &calculated_digest))) {
+                return Some(releases.latest.title.clone());
+            }
+            if let Some(dev) = releases.dev.as_ref() {
+                if dev.artifacts.iter().any(|a| a.digest.as_ref().is_some_and(|d| digests_match(d, &calculated_digest))) {
+                    return Some(dev.title.clone());
                 }
             }
             None
         })
         .unwrap_or_else(|| "installed".to_string());
 
-    // 3. PERSIST: Save the found version so next time is instant
+    println!("[Plugin] Final resolved version: '{}' for digest '{}'", version_name, calculated_digest);
+
+    // 4. Update stored config with resolved version and digest
     update_config(|stored_config| {
         stored_config.installed_plugin_version = Some(version_name.clone());
         stored_config.installed_plugin_digest = Some(calculated_digest);
@@ -159,7 +223,7 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     if let Some(latest_digest) = config.latest_plugin_digest.as_ref() {
         if let Some(installed_digest) = config.installed_plugin_digest.as_ref() {
             println!("[Plugin] Using cached latest digest");
-            if installed_digest.trim() == latest_digest.trim() {
+            if digests_match(installed_digest, latest_digest) {
                 println!("[Plugin] Digests match - no update needed");
                 return Ok(None);
             }
@@ -190,7 +254,7 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     // Compare by digest if available (more reliable)
     if let Some(latest) = latest_digest {
         if let Some(installed) = config.installed_plugin_digest {
-            if installed.trim() == latest.trim() {
+            if digests_match(&installed, &latest) {
                 println!("[Plugin] Digests match - no update needed");
                 return Ok(None); // Same digest, no update needed
             }
@@ -225,42 +289,53 @@ fn calculate_file_sha256(path: &Path) -> Result<String, String> {
     Ok(format!("sha256:{:x}", digest))
 }
 
-fn download_latest_plugin_asset(
+fn find_all_dll_assets(release: &PluginRelease) -> Vec<&Artifact> {
+    release
+        .artifacts
+        .iter()
+        .filter(|asset| asset.name.to_lowercase().ends_with(".dll"))
+        .collect()
+}
+
+fn download_latest_plugin_assets(
     download_folder: &Path,
     release: &PluginRelease,
-) -> Result<PathBuf, String> {
+) -> Result<Vec<PathBuf>, String> {
     clear_directory(download_folder)?;
 
-    let asset = find_release_asset(release).ok_or_else(|| {
-        format!(
-            "release does not contain required asset '{}'",
-            PLUGIN_ASSET_NAME
-        )
-    })?;
+    let dll_assets = find_all_dll_assets(release);
+    if dll_assets.is_empty() {
+        return Err(format!(
+            "release '{}' does not contain any DLL assets",
+            release.title
+        ));
+    }
 
-    // Construct the URL based on the new pattern: api/plugin/{release_id}/{filename}
-    let download_url = format!("{}/{}/{}", RELEASES_API_URL, release.id, asset.name);
+    let mut downloaded_paths = Vec::new();
+    for asset in dll_assets {
+        let download_url = format!("{}/{}/{}", RELEASES_API_URL, release.id, asset.name);
+        let dll_bytes = download_bytes(&download_url)?;
+        let downloaded_file_path = download_folder.join(&asset.name);
 
-    let dll_bytes = download_bytes(&download_url)?;
+        fs::write(&downloaded_file_path, dll_bytes).map_err(|error| {
+            format!(
+                "unable to write downloaded plugin asset '{}': {}",
+                downloaded_file_path.display(),
+                error
+            )
+        })?;
 
-    let downloaded_dll_path = download_folder.join(PLUGIN_ASSET_NAME);
+        downloaded_paths.push(downloaded_file_path);
+    }
 
-    fs::write(&downloaded_dll_path, dll_bytes).map_err(|error| {
-        format!(
-            "unable to write downloaded plugin asset '{}': {}",
-            downloaded_dll_path.display(),
-            error
-        )
-    })?;
-
-    Ok(downloaded_dll_path)
+    Ok(downloaded_paths)
 }
 
 pub fn run_get_latest_plugin_changelog() -> Result<String, String> {
     let config = read_config_or_default()?;
     let release = select_release(config.plugin_dev_releases_opt_in)?;
     println!("{:?}", release);
-    Ok(release.changelog)
+    Ok(release.changelog.unwrap_or_default())
 }
 
 pub fn run_update_plugin_version() -> Result<String, String> {
@@ -272,16 +347,15 @@ pub fn run_update_plugin_version() -> Result<String, String> {
 
     let release = select_release(config.plugin_dev_releases_opt_in)?;
     println!("[Plugin] Downloading version: {}", release.title);
-    let downloaded_dll_path = download_latest_plugin_asset(&download_folder, &release)?;
+    let downloaded_dll_paths = download_latest_plugin_assets(&download_folder, &release)?;
 
     let plugins_root = PathBuf::from(&app_data)
         .join("EuroScope")
         .join("LIXX")
         .join("Plugins");
     let plugin_target_directory = plugins_root.join(PLUGIN_FOLDER_NAME);
-    let plugin_target_dll_path = plugin_target_directory.join(PLUGIN_ASSET_NAME);
 
-    println!("[Plugin] Installing to: {}", plugin_target_dll_path.display());
+    println!("[Plugin] Installing to: {}", plugin_target_directory.display());
 
     fs::create_dir_all(&plugins_root).map_err(|error| {
         format!("unable to create plugins directory '{}': {}", plugins_root.display(), error)
@@ -291,9 +365,26 @@ pub fn run_update_plugin_version() -> Result<String, String> {
         format!("unable to create plugin directory '{}': {}", plugin_target_directory.display(), error)
     })?;
 
-    fs::copy(&downloaded_dll_path, &plugin_target_dll_path).map_err(|error| {
-        format!("unable to copy '{}' to '{}': {}", downloaded_dll_path.display(), plugin_target_dll_path.display(), error)
-    })?;
+    for downloaded_path in &downloaded_dll_paths {
+        if let Some(file_name) = downloaded_path.file_name() {
+            let target_path = plugin_target_directory.join(file_name);
+            fs::copy(downloaded_path, &target_path).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::PermissionDenied {
+                    format!(
+                        "unable to update plugin asset '{}': EuroScope is currently running or locking the file. Please close EuroScope and try again.",
+                        file_name.to_string_lossy()
+                    )
+                } else {
+                    format!(
+                        "unable to copy '{}' to '{}': {}",
+                        downloaded_path.display(),
+                        target_path.display(),
+                        error
+                    )
+                }
+            })?;
+        }
+    }
 
     let _ = fs::remove_dir_all(&download_folder);
 

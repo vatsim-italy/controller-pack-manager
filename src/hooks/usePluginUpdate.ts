@@ -94,12 +94,29 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
-  const buildCacheKey = useCallback((devOptIn: boolean) => {
-    return `${devOptIn ? "1" : "0"}`;
+  const buildCacheKey = useCallback(() => {
+    return "global";
   }, []);
 
-  const fetchReleasesWithFlags = useCallback(async (devOptIn: boolean, force = false) => {
-    const cacheKey = buildCacheKey(devOptIn);
+  const computeAvailableVersion = useCallback(
+    (releasesData: PluginApiResponse | null, installedVer: string | null, devOptIn: boolean): string | null => {
+      if (!releasesData) return null;
+      const targetRelease = devOptIn ? (releasesData.dev ?? releasesData.latest) : releasesData.latest;
+      if (!targetRelease || !targetRelease.title) return null;
+
+      if (
+        installedVer &&
+        installedVer.trim().toLowerCase() === targetRelease.title.trim().toLowerCase()
+      ) {
+        return null;
+      }
+      return targetRelease.title;
+    },
+    []
+  );
+
+  const fetchReleasesWithFlags = useCallback(async (_devOptIn?: boolean, force = false) => {
+    const cacheKey = buildCacheKey();
 
     if (!force && pluginCache.fetched && pluginCache.key === cacheKey) {
       setReleases(pluginCache.releases);
@@ -166,7 +183,7 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
 
       setIsDevReleasesOptedIn(devOptIn);
       setInstalledVersion(installedVer ?? null);
-      return { devOptIn };
+      return { devOptIn, installedVer: installedVer ?? null };
     } catch (error) {
       console.error("Failed to refresh settings:", error);
       throw error;
@@ -189,18 +206,17 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     setIsLoadingReleases(true);
 
     try {
-      const { devOptIn } = await refreshSettings();
-      await Promise.all([
-        fetchReleasesWithFlags(devOptIn, true),
-        refreshAvailableVersion(),
-      ]);
+      const { devOptIn, installedVer } = await refreshSettings();
+      await fetchReleasesWithFlags(devOptIn, true);
+      const computed = computeAvailableVersion(pluginCache.releases, installedVer, devOptIn);
+      setAvailableVersion(computed);
     } catch (error) {
       setUpdateError(normalizeError(error));
     } finally {
       setIsLoadingReleases(false);
       setLastCheckedAt(new Date());
     }
-  }, [fetchReleasesWithFlags, refreshAvailableVersion, refreshSettings]);
+  }, [fetchReleasesWithFlags, computeAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     if (!enabled) {
@@ -212,8 +228,10 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     const loadSettings = async () => {
       setIsLoadingSettings(true);
       try {
-        await refreshSettings();
-        await refreshAvailableVersion();
+        const { devOptIn, installedVer } = await refreshSettings();
+        await fetchReleasesWithFlags(devOptIn, false);
+        const computed = computeAvailableVersion(pluginCache.releases, installedVer, devOptIn);
+        setAvailableVersion(computed);
       } catch (error) {
         setUpdateError(normalizeError(error));
       } finally {
@@ -223,7 +241,7 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     };
 
     void loadSettings();
-  }, [enabled, refreshAvailableVersion, refreshSettings]);
+  }, [enabled, fetchReleasesWithFlags, computeAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     if (!enabled || !settingsReady) {
@@ -235,16 +253,13 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
 
   const toggleDevReleasesOptIn = async (optIn: boolean) => {
     setUpdateError(null);
+    setIsDevReleasesOptedIn(optIn);
+    setUpdateSuccess(false);
 
     try {
       await invoke("set_plugin_dev_releases_opt_in_command", { optIn });
-      setIsDevReleasesOptedIn(optIn);
-      setUpdateSuccess(false);
-
-      await Promise.all([
-        fetchReleasesWithFlags(optIn, true),
-        refreshAvailableVersion(),
-      ]);
+      const nextAvailable = computeAvailableVersion(pluginCache.releases, installedVersion, optIn);
+      setAvailableVersion(nextAvailable);
     } catch (error) {
       setUpdateError(normalizeError(error));
     }

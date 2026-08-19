@@ -2,6 +2,7 @@ import { useAiracUpdate } from "../hooks/useAiracUpdate";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
+import { InstallWarningModal, hasSeenInstallWarning } from "./InstallWarningModal";
 
 interface AiracSectionProps {
     installedAiracVersion: string | null;
@@ -92,6 +93,7 @@ export const AiracSection = ({
                                  onUpdateComplete,
                              }: AiracSectionProps) => {
     const [hasOpenedSectorDownload, setHasOpenedSectorDownload] = useState(false);
+    const [isWarningOpen, setIsWarningOpen] = useState(false);
     const {
         isUpdating,
         isImportingSectorZip,
@@ -176,6 +178,11 @@ export const AiracSection = ({
         ? `AIRAC ${targetAiracVersion}`
         : "Release notes";
 
+    const executeInstall = async () => {
+        await updateAirac();
+        setHasOpenedSectorDownload(false);
+    };
+
     const handlePrimaryAction = async () => {
         if (requiresSectorImport && !hasOpenedSectorDownload) {
             await openSectorDownloadPage();
@@ -187,8 +194,11 @@ export const AiracSection = ({
             return;
         }
         if (hasUpdate || !isInstalled) {
-            await updateAirac();
-            setHasOpenedSectorDownload(false);
+            if (!hasSeenInstallWarning()) {
+                setIsWarningOpen(true);
+                return;
+            }
+            await executeInstall();
             return;
         }
         await checkForUpdates();
@@ -218,6 +228,14 @@ export const AiracSection = ({
 
     return (
         <div className="space-y-6">
+            <InstallWarningModal
+                isOpen={isWarningOpen}
+                onClose={() => setIsWarningOpen(false)}
+                onConfirm={() => {
+                    setIsWarningOpen(false);
+                    void executeInstall();
+                }}
+            />
 
             {/* ── status card ── */}
             <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
