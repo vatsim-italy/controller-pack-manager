@@ -147,6 +147,8 @@ export const ProfilesList = ({
                 startupAsr: null,
                 configuredLists: [],
                 screenConfig: null,
+                rating: 0,
+                sector: null
             })
     );
 
@@ -350,6 +352,8 @@ export const ProfilesList = ({
             startupAsr: null,
             configuredLists: [],
             screenConfig: null,
+            rating: 0,
+            sector: null
         };
         setEntries((prev) => {
             const next = [
