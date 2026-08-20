@@ -18,6 +18,8 @@ export type Profile = {
     proxyServer: string | null,
     startupAsr: string | null,
     screenConfig: ScreenConfig | null,
+    rating: number | null,
+    sector: string | null,
 }
 
 export type ListColumn = {

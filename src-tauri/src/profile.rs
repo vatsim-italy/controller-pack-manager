@@ -2,7 +2,6 @@ use serde::Serialize;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-
 use crate::app::AppState;
 use crate::settings::ScreenConfig;
 
@@ -18,6 +17,8 @@ pub struct Profile {
     pub startup_asr: Option<String>,
     pub configured_lists: Vec<(String, String)>,
     pub screen_config: Option<ScreenConfig>,
+    pub rating: Option<i32>,
+    pub sector: Option<String>,
 }
 
 impl Profile {
@@ -64,6 +65,9 @@ impl Profile {
             "tovatsim" => {
                 profile.connect_to_vatsim = Some(value == "1");
             }
+            "rating" => {
+                profile.rating = value.parse::<i32>().ok();
+            }
             _ => {}
         }
     }
@@ -73,17 +77,24 @@ impl Profile {
             return Ok(());
         }
 
+        let key = parts[1];
+        let value = parts[2..].join(" ");
+
+        // Settings\tsector\t<path> — the currently active sector file
+        if key.eq_ignore_ascii_case("sector") {
+            profile.sector = Some(value);
+            return Ok(());
+        }
+
         // Only process Settings lines that have the "Settingsfile" prefix
         // Other Settings lines (like AselKey, FreqKey, etc.) are ignored silently
-        let Some(list_id) = parts[1].strip_prefix("Settingsfile") else {
+        let Some(list_id) = key.strip_prefix("Settingsfile") else {
             return Ok(());
         };
 
-        let config_file_path = parts[2..].join(" ");
-
         profile
             .configured_lists
-            .push((list_id.to_string(), config_file_path));
+            .push((list_id.to_string(), value));
 
         Ok(())
     }
@@ -122,6 +133,10 @@ pub fn profile_patch_lines(profile: &Profile) -> Vec<String> {
         lines.push(format!("LastSession\tproxyserver\t{}", value));
     }
 
+    if let Some(value) = profile.rating {
+        lines.push(format!("LastSession\trating\t{}", value));
+    }
+
     lines
 }
 
@@ -143,6 +158,7 @@ fn is_last_session_line_for_managed_key(line: &str) -> bool {
                 || key.eq_ignore_ascii_case("server")
                 || key.eq_ignore_ascii_case("tovatsim")
                 || key.eq_ignore_ascii_case("proxyserver")
+                || key.eq_ignore_ascii_case("rating")
         }
         None => false,
     }
@@ -160,6 +176,20 @@ fn is_recent_files_recent1_line(line: &str) -> bool {
     }
 
     matches!(parts.next(), Some(key) if key.eq_ignore_ascii_case("Recent1"))
+}
+
+fn is_settings_sector_line(line: &str) -> bool {
+    let mut parts = line.split_whitespace();
+    let section = match parts.next() {
+        Some(value) => value,
+        None => return false,
+    };
+
+    if !section.eq_ignore_ascii_case("Settings") {
+        return false;
+    }
+
+    matches!(parts.next(), Some(key) if key.eq_ignore_ascii_case("sector"))
 }
 
 fn normalize_profile_relative_path(path: &str, euroscope_config_dir: &str) -> String {
@@ -268,7 +298,9 @@ pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result
     let mut kept_lines: Vec<String> = content
         .lines()
         .filter(|line| {
-            !is_last_session_line_for_managed_key(line) && !is_recent_files_recent1_line(line)
+            !is_last_session_line_for_managed_key(line)
+                && !is_recent_files_recent1_line(line)
+                && !is_settings_sector_line(line)
         })
         .map(|line| line.to_string())
         .collect();
@@ -278,6 +310,12 @@ pub fn patch_profile_file(profile_file_path: &Path, profile: &Profile) -> Result
         let trimmed = startup_asr.trim();
         if !trimmed.is_empty() {
             kept_lines.push(format!("RecentFiles\tRecent1\t{}", trimmed));
+        }
+    }
+    if let Some(sector) = &profile.sector {
+        let trimmed = sector.trim();
+        if !trimmed.is_empty() {
+            kept_lines.push(format!("Settings\tsector\t{}", trimmed));
         }
     }
     let mut patched = kept_lines.join("\n");
@@ -344,8 +382,10 @@ pub fn update_profile_and_reload(
     server: Option<String>,
     connect_to_vatsim: Option<bool>,
     proxy_server: Option<String>,
+    rating: Option<i32>,
     startup_asr: Option<String>,
     configured_lists: Vec<(String, String)>,
+    sector: Option<String>,
     clone_from: Option<String>,
 ) -> Result<Vec<Profile>, String> {
     let normalized_startup_asr = startup_asr
@@ -363,6 +403,9 @@ pub fn update_profile_and_reload(
         startup_asr: normalized_startup_asr,
         configured_lists,
         screen_config: None,
+        rating,
+        sector,
+        ..Default::default()
     };
 
     // Build the path to the original profile file
@@ -389,7 +432,9 @@ pub fn update_profile_and_reload(
         let mut kept_lines: Vec<String> = base_content
             .lines()
             .filter(|line| {
-                !is_last_session_line_for_managed_key(line) && !is_recent_files_recent1_line(line)
+                !is_last_session_line_for_managed_key(line)
+                    && !is_recent_files_recent1_line(line)
+                    && !is_settings_sector_line(line)
             })
             .map(|line| line.to_string())
             .collect();
@@ -398,6 +443,12 @@ pub fn update_profile_and_reload(
         kept_lines.extend(profile_patch_lines(&profile_to_update));
         if let Some(startup_asr) = &profile_to_update.startup_asr {
             kept_lines.push(format!("RecentFiles\tRecent1\t{}", startup_asr));
+        }
+        if let Some(sector) = &profile_to_update.sector {
+            let trimmed = sector.trim();
+            if !trimmed.is_empty() {
+                kept_lines.push(format!("Settings\tsector\t{}", trimmed));
+            }
         }
         let mut patched = kept_lines.join("\n");
 

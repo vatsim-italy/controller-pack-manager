@@ -556,11 +556,29 @@ pub fn run_update_airac_version(
         })
         .collect();
 
+    // Detect the new .sct filename so we can update each profile's sector reference.
+    let new_sct_filename: Option<String> = fs::read_dir(&content_root)
+        .ok()
+        .and_then(|entries| {
+            entries.filter_map(|e| e.ok()).find_map(|entry| {
+                let path = entry.path();
+                if path.is_file() && extension_is(&path, "sct") {
+                    Some(format!("\\{}", entry.file_name().to_string_lossy()))
+                } else {
+                    None
+                }
+            })
+        });
+
     for profile in &existing_profiles {
         if downloaded_profile_names.contains(&profile.name) {
             let profile_file_path = content_root.join(&profile.name);
             if profile_file_path.is_file() {
-                patch_profile_file(&profile_file_path, profile)?;
+                let mut patched_profile = profile.clone();
+                if let Some(ref new_sct) = new_sct_filename {
+                    patched_profile.sector = Some(new_sct.clone());
+                }
+                patch_profile_file(&profile_file_path, &patched_profile)?;
             }
         }
     }

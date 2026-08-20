@@ -267,6 +267,8 @@ export const ProfilesList = ({
                 startupAsr: draftProfile.startupAsr,
                 connectToVatsim: draftProfile.connectToVatsim,
                 configuredLists: draftProfile.configuredLists,
+                rating: draftProfile.rating,
+                sector: draftProfile.sector,
                 cloneFrom: meta.cloneSource,
             });
 
