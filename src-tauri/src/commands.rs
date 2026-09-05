@@ -134,7 +134,7 @@ pub async fn refresh_airac_update_status(
             .lock()
             .map_err(|error| error.to_string())?;
         *available = Some(false);
-        println!("[AIRAC] Skipping update status check in CI/build environment");
+        log::info!("[AIRAC] Skipping update status check in CI/build environment");
         return Ok(false);
     }
 
@@ -174,7 +174,7 @@ pub async fn refresh_airac_update_status(
         true
     };
 
-    println!(
+    log::info!(
         "[AIRAC] Update status: installed_version={:?}, installed_digest={:?}, digest_source={:?}, latest_version={}, latest_digest={}, update_available={}",
         installed_version, installed_digest, digest_source, latest_release.version, latest_release.digest, update_available
     );
@@ -299,7 +299,7 @@ pub async fn get_latest_airac_changelog() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_latest_airac_version() -> Result<String, String> {
     if should_skip_startup_update_checks() {
-        println!("[AIRAC] Skipping latest AIRAC version fetch in CI/build environment");
+        log::info!("[AIRAC] Skipping latest AIRAC version fetch in CI/build environment");
         return Ok("unknown".to_string());
     }
 
@@ -335,7 +335,7 @@ pub fn set_plugin_dev_releases_opt_in_command(opt_in: bool) -> Result<(), String
 #[tauri::command]
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
     if should_skip_startup_update_checks() {
-        println!("[Plugin] Skipping installed plugin version lookup in CI/build environment");
+        log::info!("[Plugin] Skipping installed plugin version lookup in CI/build environment");
         return Ok(None);
     }
 

@@ -11,6 +11,7 @@ mod utils;
 
 use app::AppState;
 use commands::*;
+use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +19,15 @@ pub fn run() {
         .manage(AppState::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::LogDir { file_name: Some("controller-pack-manager".into()) }),
+                    Target::new(TargetKind::Stdout),
+                ])
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .setup(|app| {
             app.handle().remove_menu()?;
             Ok(())

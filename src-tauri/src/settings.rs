@@ -407,7 +407,7 @@ impl ListConfig {
                     "m_OrderingColumn" => config.ordered_by_index = parse_u16(value)?,
                     "m_HeaderOnly" => config.header_only = value == "1",
                     _ => {
-                        eprintln!("error: unknown key in list configuration: {}", key)
+                       log::error!("error: unknown key in list configuration: {}", key)
                     }
                 }
             } else if components.len() >= 1 {
@@ -416,7 +416,7 @@ impl ListConfig {
                 match key {
                     "m_Column" => columns.push(ListColumn::parse(line)?),
                     _ => {
-                        eprintln!("info: unknown key in list configuration: {}", key)
+                        log::error!("info: unknown key in list configuration: {}", key)
                     }
                 }
             }

@@ -399,10 +399,10 @@ fn fetch_main_branch_airac_digest() -> Result<String, String> {
 }
 
 pub fn run_get_latest_airac_release_digest() -> Result<AiracReleaseDigest, String> {
-    println!("[AIRAC] Checking latest release digest from hash.txt...");
+    log::info!("[AIRAC] Checking latest release digest from hash.txt...");
     let latest_version = run_get_latest_airac_version()?;
     let digest = fetch_main_branch_airac_digest()?;
-    println!(
+    log::info!(
         "[AIRAC] Latest release digest resolved: version={}, digest={}",
         latest_version, digest
     );
@@ -582,7 +582,7 @@ pub fn run_update_airac_version(
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
     let release_digest = fetch_main_branch_airac_digest()?;
-    println!(
+    log::info!(
         "[AIRAC] Installing release: version={}, release_digest={}",
         latest_version, release_digest
     );
@@ -647,7 +647,7 @@ pub fn run_update_airac_version(
         config.installed_airac_digest_source = Some("hash_txt".to_string());
     })
     .map_err(|error| format!("unable to save AIRAC install digest: {}", error))?;
-    println!(
+    log::info!(
         "[AIRAC] Stored installed release digest: version={}, digest={}",
         latest_version, release_digest
     );

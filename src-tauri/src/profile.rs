@@ -41,7 +41,7 @@ impl Profile {
                 Self::parse_recent_files_info(&mut profile, &parts);
             } else if parts[0] == "Settings" {
                 if let Err(error) = Self::parse_settings_info(&mut profile, &parts) {
-                    eprintln!(
+                    log::warn!(
                         "warning: failed to parse Settings line in profile '{}': {}",
                         file_name,
                         error

@@ -133,9 +133,9 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
     let config = read_config_or_default()?;
     let calculated_digest = calculate_file_sha256(&plugin_path)?;
 
-    println!("[Plugin] Calculated local file digest: {}", calculated_digest);
-    println!("[Plugin] Stored config digest: {:?}", config.installed_plugin_digest);
-    println!("[Plugin] Stored config version: {:?}", config.installed_plugin_version);
+    log::info!("[Plugin] Calculated local file digest: {}", calculated_digest);
+    log::info!("[Plugin] Stored config digest: {:?}", config.installed_plugin_digest);
+    log::info!("[Plugin] Stored config version: {:?}", config.installed_plugin_version);
 
     // 2. Fast Path: Trust saved version ONLY if stored digest matches physical file AND stored version is a resolved version string (not "installed" or "unknown")
     if let (Some(stored_digest), Some(stored_version)) = (
@@ -146,18 +146,18 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
             && stored_version != "installed"
             && stored_version != "unknown"
         {
-            println!("[Plugin] Fast-path hit: stored digest matches local file. Version: {}", stored_version);
+            log::info!("[Plugin] Fast-path hit: stored digest matches local file. Version: {}", stored_version);
             return Ok(Some(stored_version.clone()));
         }
     }
 
     // 3. Fallback / Re-verify Path: Match digest against API history, latest, and dev
-    println!("[Plugin] Fetching API releases to match local digest '{}'...", calculated_digest);
+    log::info!("[Plugin] Fetching API releases to match local digest '{}'...", calculated_digest);
     let releases = fetch_releases()?;
 
     for h in &releases.history {
         let is_match = digests_match(&h.digest, &calculated_digest);
-        println!(
+        log::info!(
             "[Plugin]   Comparing against history: version='{}', digest='{}' -> match={}",
             h.name, h.digest, is_match
         );
@@ -166,7 +166,7 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
     for a in &releases.latest.artifacts {
         if let Some(d) = &a.digest {
             let is_match = digests_match(d, &calculated_digest);
-            println!(
+            log::info!(
                 "[Plugin]   Comparing against latest artifact: name='{}', title='{}', digest='{}' -> match={}",
                 a.name, releases.latest.title, d, is_match
             );
@@ -177,7 +177,7 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
         for a in &dev.artifacts {
             if let Some(d) = &a.digest {
                 let is_match = digests_match(d, &calculated_digest);
-                println!(
+                log::info!(
                     "[Plugin]   Comparing against dev artifact: name='{}', title='{}', digest='{}' -> match={}",
                     a.name, dev.title, d, is_match
                 );
@@ -201,7 +201,7 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
         })
         .unwrap_or_else(|| "installed".to_string());
 
-    println!("[Plugin] Final resolved version: '{}' for digest '{}'", version_name, calculated_digest);
+    log::info!("[Plugin] Final resolved version: '{}' for digest '{}'", version_name, calculated_digest);
 
     // 4. Update stored config with resolved version and digest
     update_config(|stored_config| {
@@ -215,19 +215,19 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
 
 pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String> {
     let config = read_config_or_default()?;
-    println!("[Plugin] Checking for available updates...");
-    println!("[Plugin] Installed version: {:?}", config.installed_plugin_version);
-    println!("[Plugin] Installed digest: {:?}", config.installed_plugin_digest);
+    log::info!("[Plugin] Checking for available updates...");
+    log::info!("[Plugin] Installed version: {:?}", config.installed_plugin_version);
+    log::info!("[Plugin] Installed digest: {:?}", config.installed_plugin_digest);
 
     // Fast path: use cached latest digest if available
     if let Some(latest_digest) = config.latest_plugin_digest.as_ref() {
         if let Some(installed_digest) = config.installed_plugin_digest.as_ref() {
-            println!("[Plugin] Using cached latest digest");
+            log::info!("[Plugin] Using cached latest digest");
             if digests_match(installed_digest, latest_digest) {
-                println!("[Plugin] Digests match - no update needed");
+                log::info!("[Plugin] Digests match - no update needed");
                 return Ok(None);
             }
-            println!("[Plugin] Cached digests differ - update available");
+            log::info!("[Plugin] Cached digests differ - update available");
             return Ok(config.latest_plugin_version.clone());
         }
     }
@@ -235,7 +235,7 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     // Slow path: fetch from network and cache
     let release = select_release(config.plugin_dev_releases_opt_in)?;
     if release.title.trim().is_empty() {
-        println!("[Plugin] Release title is empty, no update");
+        log::info!("[Plugin] Release title is empty, no update");
         return Ok(None);
     }
 
@@ -248,36 +248,36 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
         stored_config.latest_plugin_digest = latest_digest.clone();
     }).map_err(|e| format!("failed to cache plugin info: {}", e))?;
     
-    println!("[Plugin] Latest version (fetched): {}", latest_version);
-    println!("[Plugin] Latest digest (fetched): {:?}", latest_digest);
+    log::info!("[Plugin] Latest version (fetched): {}", latest_version);
+    log::info!("[Plugin] Latest digest (fetched): {:?}", latest_digest);
 
     // Compare by digest if available (more reliable)
     if let Some(latest) = latest_digest {
         if let Some(installed) = config.installed_plugin_digest {
             if digests_match(&installed, &latest) {
-                println!("[Plugin] Digests match - no update needed");
+                log::info!("[Plugin] Digests match - no update needed");
                 return Ok(None); // Same digest, no update needed
             }
-            println!("[Plugin] Digests differ - update available");
+            log::info!("[Plugin] Digests differ - update available");
         } else {
-            println!("[Plugin] No installed digest but digest available - update available");
+            log::info!("[Plugin] No installed digest but digest available - update available");
         }
         // Different digest or no stored digest, update available
         return Ok(Some(latest_version));
     }
 
     // Fallback to version string comparison if digest not available
-    println!("[Plugin] Digest not available, falling back to version comparison");
+    log::info!("[Plugin] Digest not available, falling back to version comparison");
     if config
         .installed_plugin_version
         .as_deref()
         .is_some_and(|installed| installed.trim() == latest_version)
     {
-        println!("[Plugin] Versions match - no update needed");
+        log::info!("[Plugin] Versions match - no update needed");
         return Ok(None);
     }
 
-    println!("[Plugin] Update available: {}", latest_version);
+    log::info!("[Plugin] Update available: {}", latest_version);
     Ok(Some(latest_version))
 }
 
@@ -334,7 +334,7 @@ fn download_latest_plugin_assets(
 pub fn run_get_latest_plugin_changelog() -> Result<String, String> {
     let config = read_config_or_default()?;
     let release = select_release(config.plugin_dev_releases_opt_in)?;
-    println!("{:?}", release);
+    log::info!("{:?}", release);
     Ok(release.changelog.unwrap_or_default())
 }
 
@@ -346,7 +346,7 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     let download_folder = base_folder.join("download-plugin");
 
     let release = select_release(config.plugin_dev_releases_opt_in)?;
-    println!("[Plugin] Downloading version: {}", release.title);
+    log::info!("[Plugin] Downloading version: {}", release.title);
     let downloaded_dll_paths = download_latest_plugin_assets(&download_folder, &release)?;
 
     let plugins_root = PathBuf::from(&app_data)
@@ -355,7 +355,7 @@ pub fn run_update_plugin_version() -> Result<String, String> {
         .join("Plugins");
     let plugin_target_directory = plugins_root.join(PLUGIN_FOLDER_NAME);
 
-    println!("[Plugin] Installing to: {}", plugin_target_directory.display());
+    log::info!("[Plugin] Installing to: {}", plugin_target_directory.display());
 
     fs::create_dir_all(&plugins_root).map_err(|error| {
         format!("unable to create plugins directory '{}': {}", plugins_root.display(), error)
@@ -395,7 +395,7 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     };
 
     let installed_digest = find_release_asset(&release).and_then(|a| a.digest.clone());
-    println!("[Plugin] Storing version: {:?}, digest: {:?}", installed_version, installed_digest);
+    log::info!("[Plugin] Storing version: {:?}, digest: {:?}", installed_version, installed_digest);
 
     update_config(|stored_config| {
         stored_config.installed_plugin_version = installed_version.clone();
@@ -405,6 +405,6 @@ pub fn run_update_plugin_version() -> Result<String, String> {
         stored_config.latest_plugin_digest = None;
     }).map_err(|e| format!("failed to update config: {}", e))?;
 
-    println!("[Plugin] Update completed successfully!");
+    log::info!("[Plugin] Update completed successfully!");
     Ok(release.title)
 }
