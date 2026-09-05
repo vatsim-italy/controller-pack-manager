@@ -254,7 +254,7 @@ fn inject_imported_sector_files(
     }
 
     let imported_lixx = imported_sector_folder.join("LIXX");
-    for folder_name in ["ICAO", "NavData"] {
+    for folder_name in ["ICAO", "NavData", "Settings"] {
         let source = imported_lixx.join(folder_name);
         if source.is_dir() {
             copy_dir_all(&source, &content_root.join("LIXX").join(folder_name))?;
