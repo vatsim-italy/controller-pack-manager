@@ -134,6 +134,48 @@ fn extract_imported_sector_files(
             continue;
         };
 
+        // Only ICAO and NavData are taken from the AeroNav zip's LIXX folder —
+        // everything else under LIXX (Settings, Alias, ASR, etc.) comes from
+        // GitHub instead, so it's intentionally not extracted here.
+        let mut components = enclosed_name.components();
+        let first = components
+            .next()
+            .map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase());
+        let second = components
+            .next()
+            .map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase());
+
+        let is_wanted_lixx_subfolder = first.as_deref() == Some("lixx")
+            && matches!(second.as_deref(), Some("icao") | Some("navdata"));
+
+        if is_wanted_lixx_subfolder {
+            let output_path = destination_folder.join(&enclosed_name);
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent).map_err(|error| {
+                    format!(
+                        "unable to create imported folder '{}': {}",
+                        parent.display(),
+                        error
+                    )
+                })?;
+            }
+            let mut output_file = fs::File::create(&output_path).map_err(|error| {
+                format!(
+                    "unable to create imported file '{}': {}",
+                    output_path.display(),
+                    error
+                )
+            })?;
+            io::copy(&mut file, &mut output_file).map_err(|error| {
+                format!(
+                    "unable to extract imported file '{}': {}",
+                    output_path.display(),
+                    error
+                )
+            })?;
+            continue;
+        }
+
         let extension = enclosed_name
             .extension()
             .map(|value| value.to_string_lossy().to_ascii_lowercase())
@@ -209,6 +251,14 @@ fn inject_imported_sector_files(
                 error
             )
         })?;
+    }
+
+    let imported_lixx = imported_sector_folder.join("LIXX");
+    for folder_name in ["ICAO", "NavData"] {
+        let source = imported_lixx.join(folder_name);
+        if source.is_dir() {
+            copy_dir_all(&source, &content_root.join("LIXX").join(folder_name))?;
+        }
     }
 
     Ok(())
