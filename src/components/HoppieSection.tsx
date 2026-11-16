@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { Notice } from "./StatusStrip";
 
 interface HoppieSectionProps {
     hoppieCode: string | null;
@@ -56,74 +57,50 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
     };
 
     return (
-        <div className="space-y-4">
+        <section className="panel space-y-4 p-5">
             <div>
-                <h2 className="text-3xl font-bold text-white">Hoppie Code CPDLC Section</h2>
-                <p className="mt-1 text-sm text-secondary-500">
-                    Your Hoppie code is required for CPDLC and DCL operations in the LIXX FIR.
+                <label htmlFor="hoppie-code" className="font-semibold text-secondary-100">
+                    Hoppie logon code
+                </label>
+                <p className="text-sm text-secondary-400">
+                    {hoppieCode
+                        ? "Saved in your TopSky settings."
+                        : "No code found. Get one at hoppie.nl, then save it here."}
                 </p>
             </div>
 
-            <section className="rounded-xl border border-secondary-600 bg-dark-header p-4 shadow-md">
-                <div className="space-y-4">
-                    <div>
-                        <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-secondary-500">Current Hoppie Code</span>
-                        <div className="flex items-center gap-2">
-                            <div className="flex flex-1 items-center gap-2 rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2">
-                                <span className="text-secondary-500">⇄</span>
-                                <input
-                                    type={isCodeVisible ? "text" : "password"}
-                                    value={codeInput}
-                                    onChange={(event) => setCodeInput(event.target.value)}
-                                    className="w-full bg-transparent font-mono text-sm text-white outline-none"
-                                />
-                                <button
-                                    type="button"
-                                    className="text-secondary-100 transition-colors hover:text-white"
-                                    onClick={() => setIsCodeVisible((current) => !current)}
-                                    aria-label={isCodeVisible ? "Hide code" : "Show code"}
-                                >
-                                    {isCodeVisible ? <IconEyeClosed /> : <IconEyeOpen />}
-                                </button>
-                            </div>
-
-                            <button
-                                className="btn-primary px-4 py-2 text-sm font-bold"
-                                onClick={handleUpdateHoppieCode}
-                                disabled={isUpdatingCode}
-                            >
-                                {isUpdatingCode ? "Updating..." : "Update Hoppie Code"}
-                            </button>
-                        </div>
-
-                        {!hoppieCode && (
-                            <p className="mt-2 text-sm text-secondary-500">
-                                No Hoppie code was found. Enter a code and press update.
-                            </p>
-                        )}
-                    </div>
-
-                    {updateError && (
-                        <div className="alert alert-error">
-                            <div className="alert-icon">❌</div>
-                            <div className="alert-content">
-                                <div className="alert-title">Update Failed</div>
-                                <div className="alert-message">{updateError}</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {updateSuccess && (
-                        <div className="alert alert-success">
-                            <div className="alert-icon">✅</div>
-                            <div className="alert-content">
-                                <div className="alert-title">Update Completed</div>
-                                <div className="alert-message">Hoppie code has been updated.</div>
-                            </div>
-                        </div>
-                    )}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-[16rem] flex-1 items-center rounded-[3px] border border-secondary-600 bg-secondary-800 focus-within:border-secondary-500">
+                    <input
+                        id="hoppie-code"
+                        type={isCodeVisible ? "text" : "password"}
+                        value={codeInput}
+                        onChange={(event) => setCodeInput(event.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="w-full bg-transparent px-3 py-2 font-mono text-sm text-secondary-100 outline-none"
+                    />
+                    <button
+                        type="button"
+                        className="px-3 text-secondary-400 transition-colors hover:text-secondary-100"
+                        onClick={() => setIsCodeVisible((current) => !current)}
+                        aria-label={isCodeVisible ? "Hide code" : "Show code"}
+                    >
+                        {isCodeVisible ? <IconEyeClosed /> : <IconEyeOpen />}
+                    </button>
                 </div>
-            </section>
-        </div>
+
+                <button
+                    type="button"
+                    className="btn-primary btn-small"
+                    onClick={handleUpdateHoppieCode}
+                    disabled={isUpdatingCode}
+                >
+                    {isUpdatingCode ? "Saving…" : updateSuccess ? "Saved" : "Save code"}
+                </button>
+            </div>
+
+            {updateError && <Notice kind="danger" title="Couldn't save the code" message={updateError} />}
+        </section>
     );
 };

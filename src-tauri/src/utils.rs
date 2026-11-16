@@ -4,6 +4,8 @@ use std::path::Path;
 pub fn should_skip_release_entry(name: &str) -> bool {
     let lower_name = name.to_ascii_lowercase();
     lower_name == "ignore"
+        || lower_name == ".github"
+        || lower_name == "readme.md"
         || lower_name == "crc_checksums.txt"
         || lower_name.contains("checksum")
         || lower_name.ends_with(".sha256")

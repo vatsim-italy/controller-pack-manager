@@ -70,7 +70,7 @@ pub fn refresh_detected_installed_airac_version(
     if let Some(dir) = euroscope_dir {
         let airac_file = std::path::PathBuf::from(&dir).join("LIXX").join("AIRAC_VERSION.txt");
         if let Ok(content) = std::fs::read_to_string(&airac_file) {
-            let detected = content.split(' ').skip(1).next().map(|v| v.trim().to_string());
+            let detected = crate::airac::parse_airac_version_file(&content);
 
             // Update in-memory AppState
             let mut lock = state
@@ -147,36 +147,25 @@ pub async fn refresh_airac_update_status(
         .await
         .map_err(|error| format!("AIRAC digest check task failed: {}", error))??;
 
-    let config = read_config_or_default()?;
-    let installed_digest = config.installed_airac_digest.clone();
-    let digest_source = config.installed_airac_digest_source.clone();
-    let update_available = if digest_source.as_deref() == Some("hash_txt") {
-        installed_digest
-            .as_deref()
-            .map(|digest| digest.trim() != latest_release.digest.trim())
-            .unwrap_or(true)
-    } else if installed_version
-        .as_deref()
-        .is_some_and(|version| version.trim() == latest_release.version.trim())
-    {
-        let latest_version = latest_release.version.clone();
-        let latest_digest = latest_release.digest.clone();
-        update_config(|config| {
-            config.installed_airac_version = Some(latest_version);
-            config.installed_airac_digest = Some(latest_digest);
-            config.installed_airac_digest_source = Some("hash_txt".to_string());
+    // Re-read the installed hash.txt from disk every check; config is only a fallback for old installs.
+    let local_digest = state
+        .euroscope_config_dir
+        .lock()
+        .map_err(|error| error.to_string())?
+        .clone()
+        .and_then(|dir| {
+            std::fs::read_to_string(std::path::PathBuf::from(dir).join("LIXX").join("hash.txt")).ok()
         })
-        .map_err(|error| format!("unable to migrate AIRAC digest status: {}", error))?;
-        false
-    } else if let Some(installed_version) = installed_version.as_deref() {
-        AppState::is_latest_newer(installed_version, &latest_release.version).unwrap_or(true)
-    } else {
-        true
-    };
+        .and_then(|content| crate::airac::normalize_hash_file_content(&content).ok());
+    let installed_digest = local_digest.or(read_config_or_default()?.installed_airac_digest);
+    let update_available = installed_digest
+        .as_deref()
+        .map(|digest| digest.trim() != latest_release.digest.trim())
+        .unwrap_or(true);
 
     log::info!(
-        "[AIRAC] Update status: installed_version={:?}, installed_digest={:?}, digest_source={:?}, latest_version={}, latest_digest={}, update_available={}",
-        installed_version, installed_digest, digest_source, latest_release.version, latest_release.digest, update_available
+        "[AIRAC] Update status: installed_version={:?}, installed_digest={:?}, latest_version={}, latest_digest={}, update_available={}",
+        installed_version, installed_digest, latest_release.version, latest_release.digest, update_available
     );
 
     let mut available = state

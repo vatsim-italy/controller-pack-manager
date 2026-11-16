@@ -29,7 +29,6 @@ type AppProps = {
 function App(
     {
         euroscopeConfigPath,
-        installedPluginVersion,
         profiles,
         hoppieCode,
         listConfigs,
@@ -65,7 +64,6 @@ function App(
         available: initialAvailable
     });
     const pluginState = usePluginUpdate(Boolean(euroscopeConfigPathState));
-    const currentPluginVersion = pluginState.installedVersion ?? installedPluginVersion;
 
 
     const refreshEuroScopeData = useCallback(async (resolvedPath: string | null) => {
@@ -433,20 +431,20 @@ function App(
     const sectionMeta = useMemo(() => {
         const titles: Record<DashboardSection, { title: string; subtitle: string }> = {
             "sector-file": {
-                title: "Sector File Manager",
-                subtitle: "Manage AIRAC updates for your local EuroScope sector files.",
+                title: "Sector files",
+                subtitle: "Keep the LIXX sector files, profiles and settings on the current AIRAC.",
             },
             plugin: {
-                title: "VATITA Controller Plugin",
-                subtitle: "Manage and update the VATITA plugin for EuroScope.",
+                title: "Controller plugin",
+                subtitle: "The VATITA plugin for EuroScope.",
             },
             profiles: {
                 title: "Profiles",
-                subtitle: "View and verify detected controller profiles.",
+                subtitle: "Your EuroScope profiles and the details they log in with.",
             },
             topsky: {
                 title: "TopSky",
-                subtitle: "Manage your Hoppie code used by TopSky CPDLC features.",
+                subtitle: "Your Hoppie logon code, used by TopSky for CPDLC and DCL in the LIXX FIR.",
             },
             lists: {
                 title: "Lists",
@@ -454,7 +452,7 @@ function App(
             },
             settings: {
                 title: "Settings",
-                subtitle: "Choose where EuroScope stores its files and override auto-detection if needed.",
+                subtitle: "Where the controller pack is installed.",
             },
         };
 
@@ -556,18 +554,19 @@ function App(
         <Layout
             activeSection={activeSection}
             onSectionChange={setActiveSection}
+            attention={{ "sector-file": airacState.available === true, plugin: Boolean(pluginState.availableVersion) }}
         >
-            <div className="w-full space-y-4">
-                <section className="border-b border-secondary-600 pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                        <h1 className="text-2xl font-semibold text-white">{sectionMeta.title}</h1>
+            <div className={`w-full space-y-6 ${activeSection === "lists" ? "" : "max-w-4xl"}`}>
+                <section>
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <h1 className="font-display text-2xl font-bold text-secondary-100">{sectionMeta.title}</h1>
                         <div className="flex items-center gap-3">
-                            {(activeSection === "lists" || activeSection === "profiles") && appProfiles && appProfiles.length > 0 && (
+                            {activeSection === "lists" && appProfiles && appProfiles.length > 0 && (
                                 <div className="flex items-center gap-3">
                                     <label className="flex items-center gap-3 text-sm text-secondary-100">
-                                        <span className="text-secondary-500 font-semibold">Profile</span>
+                                        <span className="text-secondary-400">Profile</span>
                                         <select
-                                            className="rounded border border-secondary-500 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 font-medium"
+                                            className="rounded-[3px] border border-secondary-600 bg-secondary-800 px-3 py-2 text-sm font-medium text-secondary-100"
                                             value={selectedProfileName || ""}
                                             onChange={(event) => setSelectedProfileName(event.target.value)}
                                         >
@@ -582,11 +581,11 @@ function App(
                                         <>
                                             <button
                                                 type="button"
-                                                className="rounded border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                className="btn-primary btn-small"
                                                 onClick={handleSaveLayout}
                                                 disabled={isSaving}
                                             >
-                                                {isSaving ? "Saving..." : saveSuccess ? "✓ Saved!" : "Save Layout to Profile"}
+                                                {isSaving ? "Saving…" : saveSuccess ? "Saved" : "Save layout to profile"}
                                             </button>
                                             {saveError && (
                                                 <div className="rounded border border-accent-danger bg-accent-danger/10 px-3 py-2 text-sm font-medium text-accent-danger flex items-center gap-2">
@@ -598,29 +597,17 @@ function App(
                                     )}
                                 </div>
                             )}
-                            {activeSection === "sector-file" && (
-                                <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    AIRAC {airacState.installed ?? "Not installed"}
-                                </span>
-                            )}
-                            {activeSection === "plugin" && (
-                                <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
-                                    {currentPluginVersion
-                                        ? `${currentPluginVersion}`
-                                        : "Plugin not installed"}
-                                </span>
-                            )}
                         </div>
                     </div>
-                    <p className="mt-1 text-sm text-secondary-500">{sectionMeta.subtitle}</p>
+                    <p className="mt-1 text-secondary-400">{sectionMeta.subtitle}</p>
                 </section>
 
                 {isMissingSettingsModalOpen && !euroscopeConfigPathState && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm">
-                        <div className="w-full max-w-md rounded-2xl border border-secondary-600 bg-secondary-700 p-6 shadow-2xl">
-                            <h2 className="text-xl font-semibold text-white">Where is it?</h2>
+                        <div className="w-full max-w-md rounded-2xl border border-secondary-600 bg-dark-header p-6">
+                            <h2 className="text-xl font-bold text-secondary-100">Choose your EuroScope folder</h2>
                             <p className="mt-2 text-sm text-secondary-400">
-                                Please select the EuroScope folder to continue.
+                                It wasn't found automatically. It's usually AppData\Roaming\EuroScope.
                             </p>
 
                             <div className="mt-5 flex flex-wrap gap-3">
@@ -630,7 +617,7 @@ function App(
                                     onClick={chooseEuroScopeFolder}
                                     disabled={isPickingFolder}
                                 >
-                                    {isPickingFolder ? "Opening..." : "Choose Folder"}
+                                    {isPickingFolder ? "Opening…" : "Choose folder"}
                                 </button>
                                 <button
                                     type="button"
@@ -638,7 +625,7 @@ function App(
                                     onClick={() => setIsMissingSettingsModalOpen(false)}
                                     disabled={isPickingFolder}
                                 >
-                                    Not Now
+                                    Not now
                                 </button>
                             </div>
 

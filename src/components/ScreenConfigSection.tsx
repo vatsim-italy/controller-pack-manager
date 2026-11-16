@@ -265,7 +265,7 @@ export const ScreenConfigSection = ({ screenConfig, onChange }: ScreenConfigSect
 
     return (
         <div className="space-y-4">
-            <div className="rounded-xl border border-secondary-600 bg-secondary-700/30 p-4">
+            <div className="rounded-md border border-secondary-600 bg-secondary-700/30 p-4">
                 <div className="mb-3">
                     <h4 className="text-sm font-semibold text-secondary-100">Display Configuration</h4>
                     <p className="mt-1 text-xs text-secondary-500">Select target monitor and placement behavior.</p>
@@ -313,7 +313,7 @@ export const ScreenConfigSection = ({ screenConfig, onChange }: ScreenConfigSect
                         </button>
 
                         {isPositionDropdownOpen && (
-                            <div className="absolute z-20 mt-1 w-full overflow-hidden rounded border border-secondary-600 bg-secondary-700 shadow-lg">
+                            <div className="absolute z-20 mt-1 w-full overflow-hidden rounded border border-secondary-600 bg-secondary-700">
                                 {displayPositions.map((position, index) => {
                                     const isSelected = config.display_config.position === index;
 
@@ -322,7 +322,7 @@ export const ScreenConfigSection = ({ screenConfig, onChange }: ScreenConfigSect
                                             key={position.key}
                                             type="button"
                                             className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${isSelected
-                                                ? "bg-secondary-600 text-white"
+                                                ? "bg-secondary-600 text-secondary-100"
                                                 : "text-secondary-100 hover:bg-secondary-600"
                                                 }`}
                                             onClick={() => {
@@ -366,7 +366,7 @@ export const ScreenConfigSection = ({ screenConfig, onChange }: ScreenConfigSect
                 </div>
             </div>
 
-            <div className="rounded-xl border border-secondary-600 bg-secondary-700/30 p-4">
+            <div className="rounded-md border border-secondary-600 bg-secondary-700/30 p-4">
                 <div className="mb-3">
                     <h4 className="text-sm font-semibold text-secondary-100">Title Bar</h4>
                     <p className="mt-1 text-xs text-secondary-500">Control visible elements in the radar title bar.</p>

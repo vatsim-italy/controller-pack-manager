@@ -54,6 +54,12 @@ fn fetch_releases() -> Result<PluginApiResponse, String> {
         .map_err(|error| format!("unable to parse releases list payload: {}", error))
 }
 
+fn pack_dir() -> Result<PathBuf, String> {
+    crate::app::AppState::resolve_euroscope_config_folder()
+        .map(PathBuf::from)
+        .ok_or_else(|| "EuroScope folder not found".to_string())
+}
+
 fn find_release_asset(release: &PluginRelease) -> Option<&Artifact> {
     release
         .artifacts
@@ -112,9 +118,9 @@ fn digests_match(d1: &str, d2: &str) -> bool {
 }
 
 pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
-    let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
-    let plugin_path = PathBuf::from(&app_data)
-        .join("EuroScope/LIXX/Plugins")
+    let plugin_path = pack_dir()?
+        .join("LIXX")
+        .join("Plugins")
         .join(PLUGIN_FOLDER_NAME)
         .join(PLUGIN_ASSET_NAME);
 
@@ -219,20 +225,7 @@ pub fn get_latest_plugin_installable_version() -> Result<Option<String>, String>
     log::info!("[Plugin] Installed version: {:?}", config.installed_plugin_version);
     log::info!("[Plugin] Installed digest: {:?}", config.installed_plugin_digest);
 
-    // Fast path: use cached latest digest if available
-    if let Some(latest_digest) = config.latest_plugin_digest.as_ref() {
-        if let Some(installed_digest) = config.installed_plugin_digest.as_ref() {
-            log::info!("[Plugin] Using cached latest digest");
-            if digests_match(installed_digest, latest_digest) {
-                log::info!("[Plugin] Digests match - no update needed");
-                return Ok(None);
-            }
-            log::info!("[Plugin] Cached digests differ - update available");
-            return Ok(config.latest_plugin_version.clone());
-        }
-    }
-
-    // Slow path: fetch from network and cache
+    // Always fetch: a check must see a new SHA even when the title is unchanged
     let release = select_release(config.plugin_dev_releases_opt_in)?;
     if release.title.trim().is_empty() {
         log::info!("[Plugin] Release title is empty, no update");
@@ -349,8 +342,7 @@ pub fn run_update_plugin_version() -> Result<String, String> {
     log::info!("[Plugin] Downloading version: {}", release.title);
     let downloaded_dll_paths = download_latest_plugin_assets(&download_folder, &release)?;
 
-    let plugins_root = PathBuf::from(&app_data)
-        .join("EuroScope")
+    let plugins_root = pack_dir()?
         .join("LIXX")
         .join("Plugins");
     let plugin_target_directory = plugins_root.join(PLUGIN_FOLDER_NAME);

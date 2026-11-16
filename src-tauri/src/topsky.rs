@@ -1,4 +1,3 @@
-use std::env;
 use std::fs;
 use std::path::Path;
 
@@ -34,9 +33,9 @@ pub fn run_update_hoppie_code(hoppie_code: String) -> Result<(), String> {
         return Err("hoppie code cannot be empty".to_string());
     }
 
-    let app_data = env::var("APPDATA").map_err(|_| "unable to find appdata folder".to_string())?;
-    let hoppie_file_path = Path::new(&app_data)
-        .join("EuroScope")
+    let pack_dir = crate::app::AppState::resolve_euroscope_config_folder()
+        .ok_or_else(|| "EuroScope folder not found".to_string())?;
+    let hoppie_file_path = Path::new(&pack_dir)
         .join("Plugins")
         .join("Topsky")
         .join("TopSkyCPDLCHoppieCode.txt");

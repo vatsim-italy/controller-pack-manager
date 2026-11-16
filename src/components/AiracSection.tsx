@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
 import { InstallWarningModal, hasSeenInstallWarning } from "./InstallWarningModal";
+import { Notice, StatusStrip, StripTone, formatLastChecked, stripButtonClass } from "./StatusStrip";
 
 interface AiracSectionProps {
     installedAiracVersion: string | null;
@@ -11,77 +12,6 @@ interface AiracSectionProps {
     startupError: string | null;
     onUpdateComplete?: () => void;
 }
-
-// ─── sub-components ───────────────────────────────────────────────────────────
-
-const MetricTile = ({
-                        label,
-                        value,
-                        valueClassName = "text-white",
-                    }: {
-    label: string;
-    value: string;
-    valueClassName?: string;
-}) => (
-    <div className="rounded-lg bg-secondary-700/50 px-3 py-2.5">
-        <div className="mb-1 text-xs text-secondary-500">{label}</div>
-        <div className={`text-sm font-semibold ${valueClassName}`}>{value}</div>
-    </div>
-);
-
-const InlineAlert = ({
-                         kind,
-                         title,
-                         message,
-                         onDismiss,
-                     }: {
-    kind: "danger" | "success" | "warning";
-    title: string;
-    message: string;
-    onDismiss?: () => void;
-}) => {
-    const styles = {
-        danger: {
-            wrapper: "bg-accent-danger/10 border-t border-accent-danger/30",
-            icon: "text-accent-danger",
-            title: "text-accent-danger",
-        },
-        success: {
-            wrapper: "bg-green-600/10 border-t border-green-600/30",
-            icon: "text-green-400",
-            title: "text-green-400",
-        },
-        warning: {
-            wrapper: "bg-accent-warning/10 border-t border-accent-warning/30",
-            icon: "text-accent-warning",
-            title: "text-accent-warning",
-        },
-    }[kind];
-
-    const icon = kind === "danger" ? "⚠" : kind === "success" ? "✓" : "⚠";
-
-    return (
-        <div className={`flex items-start gap-3 px-5 py-3 ${styles.wrapper}`}>
-            <span className={`mt-0.5 flex-shrink-0 text-sm font-bold ${styles.icon}`}>
-                {icon}
-            </span>
-            <div className="flex-1 min-w-0">
-                <div className={`text-sm font-semibold ${styles.title}`}>{title}</div>
-                <div className="mt-0.5 text-xs text-secondary-400">{message}</div>
-            </div>
-            {onDismiss && (
-                <button
-                    type="button"
-                    onClick={onDismiss}
-                    className="flex-shrink-0 text-secondary-500 hover:text-secondary-300 transition-colors text-xs"
-                    aria-label="Dismiss"
-                >
-                    ✕
-                </button>
-            )}
-        </div>
-    );
-};
 
 // ─── main component ───────────────────────────────────────────────────────────
 
@@ -118,65 +48,39 @@ export const AiracSection = ({
     const requiresSectorImport = !hasImportedSectorFiles && (hasUpdate || !isInstalled);
     const targetAiracVersion = latestAiracVersion ?? installedAiracVersion ?? "—";
 
-    const installedDisplay = installedAiracVersion ?? "Not installed";
-    const availableDisplay = latestAiracVersion ?? "—";
-
-    const statusDotClass = startupError
-        ? "bg-accent-danger"
-        : requiresSectorImport
-            ? "bg-accent-warning"
-            : hasUpdate
-                ? "bg-accent-warning"
-                : isInstalled
-                    ? "bg-green-500"
-                    : "bg-secondary-500";
+    const tone: StripTone = startupError
+        ? "error"
+        : requiresSectorImport || hasUpdate
+            ? "action"
+            : isInstalled
+                ? "current"
+                : "idle";
 
     const statusLabel = startupError
-        ? "AIRAC status unavailable"
-        : requiresSectorImport && !hasOpenedSectorDownload
-            ? "Sector package required — download before installing"
-            : requiresSectorImport
-                ? "Import the downloaded AeroNav ZIP to continue"
-                : hasUpdate
-                    ? `Update available — AIRAC ${targetAiracVersion}`
-                    : isUpToDate || updateSuccess
-                        ? `Up to date — AIRAC ${installedDisplay}`
-                        : isInstalled
-                            ? `Installed — AIRAC ${installedDisplay}`
-                            : "Not installed";
+        ? "Status unavailable"
+        : requiresSectorImport
+            ? "Sector files needed"
+            : hasUpdate
+                ? "Update available"
+                : isUpToDate || updateSuccess || isInstalled
+                    ? "Up to date"
+                    : "Not installed";
 
     const primaryLabel = isUpdating
-        ? "Installing..."
+        ? "Installing…"
         : isImportingSectorZip
-            ? "Importing..."
+            ? "Importing…"
             : requiresSectorImport && !hasOpenedSectorDownload
-                ? "Download Sector ZIP"
+                ? "Download sector files"
                 : requiresSectorImport
-                    ? "Import Sector ZIP"
+                    ? "Import ZIP"
                     : hasUpdate
-                        ? "Install Update"
+                        ? "Install update"
                         : !isInstalled
                             ? "Install"
-                            : "Check for Updates";
+                            : "Check for updates";
 
     const isPrimaryDisabled = startupError !== null || isUpdating || isImportingSectorZip;
-
-    const primaryClassName = requiresSectorImport
-        ? "btn-warning btn-small disabled:opacity-40 disabled:cursor-not-allowed"
-        : "btn-primary btn-small disabled:opacity-40 disabled:cursor-not-allowed";
-
-    const formattedLastChecked = lastCheckedAt
-        ? lastCheckedAt.toLocaleString([], {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-        : "Never";
-
-    const changelogBadge = targetAiracVersion !== "—"
-        ? `AIRAC ${targetAiracVersion}`
-        : "Release notes";
 
     const executeInstall = async () => {
         await updateAirac();
@@ -226,8 +130,40 @@ export const AiracSection = ({
         updateSuccess,
     ]);
 
+    const steps = [
+        {
+            title: "Download the sector files from AeroNav",
+            detail: "Log in on AeroNav and download the LIXX package. It opens in your browser.",
+            done: hasOpenedSectorDownload,
+            // The strip button drives the next step; this only lets people reopen the page.
+            action: hasOpenedSectorDownload ? (
+                <button
+                    type="button"
+                    className="btn-secondary btn-small"
+                    onClick={() => void openSectorDownloadPage()}
+                    disabled={isPrimaryDisabled}
+                >
+                    Open AeroNav again
+                </button>
+            ) : null,
+        },
+        {
+            title: "Import the ZIP you downloaded",
+            detail: "Pick the AeroNav ZIP. Only its .sct, .ese, ICAO and NavData files are used.",
+            done: hasImportedSectorFiles,
+            action: null,
+        },
+        {
+            title: `Install AIRAC ${targetAiracVersion}`,
+            detail: "Available once the sector files are imported.",
+            done: false,
+            action: null,
+        },
+    ];
+    const currentStep = steps.findIndex((step) => !step.done);
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             <InstallWarningModal
                 isOpen={isWarningOpen}
                 onClose={() => setIsWarningOpen(false)}
@@ -237,118 +173,88 @@ export const AiracSection = ({
                 }}
             />
 
-            {/* ── status card ── */}
-            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
+            <StatusStrip
+                tone={tone}
+                installed={installedAiracVersion ?? "—"}
+                latest={latestAiracVersion ?? "—"}
+                status={statusLabel}
+                lastChecked={formatLastChecked(lastCheckedAt)}
+                action={
+                    <button
+                        type="button"
+                        disabled={isPrimaryDisabled}
+                        onClick={() => void handlePrimaryAction()}
+                        className={stripButtonClass}
+                    >
+                        {isUpdating && (
+                            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-strip border-t-transparent" />
+                        )}
+                        {primaryLabel}
+                    </button>
+                }
+            />
 
-                {/* status bar */}
-                <div className="flex items-center gap-3 border-b border-secondary-600 px-5 py-3.5">
-                    <div className={`h-2 w-2 flex-shrink-0 rounded-full ${statusDotClass}`} />
-                    <span className="flex-1 text-sm font-semibold text-white">{statusLabel}</span>
-                    <span className="text-xs text-secondary-500">
-                        Last checked: {formattedLastChecked}
-                    </span>
-                </div>
+            {requiresSectorImport && !startupError && (
+                <ol className="panel divide-y divide-secondary-600" aria-label="Install steps">
+                    {steps.map((step, index) => {
+                        const isCurrent = index === currentStep;
+                        return (
+                            <li key={step.title} className={`flex items-center gap-4 px-5 py-4 ${isCurrent ? "" : "opacity-60"}`}>
+                                <span
+                                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold ${
+                                        step.done
+                                            ? "bg-accent-success text-strip-ink"
+                                            : isCurrent
+                                                ? "bg-strip text-strip-ink"
+                                                : "border border-secondary-500 text-secondary-400"
+                                    }`}
+                                    aria-hidden
+                                >
+                                    {step.done ? "✓" : index + 1}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="font-semibold text-secondary-100">{step.title}</div>
+                                    <div className="text-sm text-secondary-400">{step.detail}</div>
+                                </div>
+                                {step.action}
+                            </li>
+                        );
+                    })}
+                </ol>
+            )}
 
-                {/* body */}
-                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+            {startupError && (
+                <Notice kind="danger" title="Couldn't load AIRAC information" message={startupError} />
+            )}
+            {sectorImportError && (
+                <Notice kind="danger" title="Sector import failed" message={sectorImportError} onDismiss={clearError} />
+            )}
+            {sectorImportSuccess && (
+                <Notice kind="success" title="Sector files imported" message={sectorImportSuccess} />
+            )}
+            {updateError && (
+                <Notice kind="danger" title="Install failed" message={updateError} onDismiss={clearError} />
+            )}
+            {updateSuccess && (
+                <Notice kind="success" title="Installed" message="Your sector files are on the latest AIRAC." />
+            )}
 
-                    {/* version tiles */}
-                    <div className="grid grid-cols-2 gap-2 flex-1 min-w-[200px]">
-                        <MetricTile label="Installed" value={installedDisplay} />
-                        <MetricTile
-                            label="Available"
-                            value={availableDisplay}
-                            valueClassName={hasUpdate ? "text-accent-warning" : "text-secondary-500"}
-                        />
-                    </div>
-
-                    {/* action */}
-                    <div className="flex flex-col items-end gap-2">
-                        <button
-                            type="button"
-                            disabled={isPrimaryDisabled}
-                            onClick={() => void handlePrimaryAction()}
-                            className={primaryClassName}
-                        >
-                            {isUpdating && (
-                                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            )}
-                            {primaryLabel}
-                        </button>
-                    </div>
-                </div>
-
-                {/* sector import notice */}
-                {requiresSectorImport && !startupError && (
-                    <div className="mx-5 mb-4 rounded-lg border border-accent-warning/40 bg-accent-warning/10 px-4 py-3">
-                        <p className="text-xs font-semibold text-accent-warning">
-                            {hasOpenedSectorDownload
-                                ? "Import the AeroNav ZIP you just downloaded to continue."
-                                : "A sector package is required before installation. Download it first."}
-                        </p>
-                    </div>
-                )}
-
-                {/* alerts */}
-                {startupError && (
-                    <InlineAlert
-                        kind="danger"
-                        title="Unable to load"
-                        message="AIRAC information could not be loaded due to a startup error."
-                    />
-                )}
-                {sectorImportError && (
-                    <InlineAlert
-                        kind="danger"
-                        title="Sector import failed"
-                        message={sectorImportError}
-                        onDismiss={clearError}
-                    />
-                )}
-                {sectorImportSuccess && (
-                    <InlineAlert
-                        kind="success"
-                        title="Sector files imported"
-                        message={sectorImportSuccess}
-                    />
-                )}
-                {updateError && (
-                    <InlineAlert
-                        kind="danger"
-                        title="Update failed"
-                        message={updateError}
-                        onDismiss={clearError}
-                    />
-                )}
-                {updateSuccess && (
-                    <InlineAlert
-                        kind="success"
-                        title="Update complete"
-                        message="AIRAC files have been successfully updated."
-                    />
-                )}
-            </section>
-
-            {/* ── changelog card ── */}
-            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
-                <div className="flex items-center justify-between border-b border-secondary-600 bg-secondary-700/40 px-5 py-3.5">
-                    <span className="text-sm font-semibold text-white">Changelog</span>
-                    <span className="rounded-md border border-secondary-600 bg-secondary-700 px-2 py-0.5 text-xs text-secondary-400">
-                        {changelogBadge}
-                    </span>
-                </div>
-
+            <section className="panel">
+                <h2 className="panel-title">
+                    <span>What's new</span>
+                    {targetAiracVersion !== "—" && (
+                        <span className="font-mono text-xs font-normal text-secondary-400">AIRAC {targetAiracVersion}</span>
+                    )}
+                </h2>
                 <div className="custom-scrollbar max-h-96 overflow-y-auto px-5 py-4">
                     {isLoadingChangelog ? (
                         <p className="text-sm text-secondary-500">Loading release notes…</p>
                     ) : changelog ? (
-                        <div className="markdown-content">
+                        <div className="markdown-content max-w-[70ch]">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{changelog}</ReactMarkdown>
                         </div>
                     ) : (
-                        <p className="text-sm text-secondary-500">
-                            No changelog available for this release.
-                        </p>
+                        <p className="text-sm text-secondary-500">This release has no notes.</p>
                     )}
                 </div>
             </section>
