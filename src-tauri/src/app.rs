@@ -164,49 +164,7 @@ impl AppState {
             .join("AIRAC_VERSION.txt");
 
         let file_content = std::fs::read_to_string(airac_version_file).ok()?;
-
-        file_content
-            .split(' ')
-            .skip(1)
-            .next()
-            .map(|version| version.trim().to_string())
-    }
-
-    fn parse_version_components(input: &str) -> Option<Vec<u32>> {
-        let components: Vec<u32> = input
-            .split(|character: char| !character.is_ascii_digit())
-            .filter(|token| !token.is_empty())
-            .map(str::parse::<u32>)
-            .collect::<Result<Vec<_>, _>>()
-            .ok()?;
-
-        if components.is_empty() {
-            return None;
-        }
-
-        Some(components)
-    }
-
-    pub(crate) fn is_latest_newer(current_version: &str, latest_version: &str) -> Option<bool> {
-        let current_components = Self::parse_version_components(current_version)?;
-        let latest_components = Self::parse_version_components(latest_version)?;
-
-        let max_len = current_components.len().max(latest_components.len());
-
-        for index in 0..max_len {
-            let current = *current_components.get(index).unwrap_or(&0);
-            let latest = *latest_components.get(index).unwrap_or(&0);
-
-            if latest > current {
-                return Some(true);
-            }
-
-            if latest < current {
-                return Some(false);
-            }
-        }
-
-        Some(false)
+        crate::airac::parse_airac_version_file(&file_content)
     }
 
     pub fn parse_existing_profiles(euroscope_config_dir: &str) -> Option<Vec<Profile>> {

@@ -12,6 +12,8 @@ const LATEST_RELEASE_API_URL: &str =
     "https://api.github.com/repos/vatsim-italy/VATITA-GNG-Files/releases/latest";
 const MAIN_BRANCH_HASH_URL: &str =
     "https://raw.githubusercontent.com/vatsim-italy/VATITA-GNG-Files/main/hash.txt";
+const MAIN_BRANCH_AIRAC_VERSION_URL: &str =
+    "https://raw.githubusercontent.com/vatsim-italy/VATITA-GNG-Files/main/AIRAC_VERSION.txt";
 const APP_DATA_FOLDER_NAME: &str = "controller-pack-manager";
 const IMPORTED_SECTOR_FILES_FOLDER_NAME: &str = "imported-sector-files";
 
@@ -298,16 +300,10 @@ pub struct AiracReleaseDigest {
     pub digest: String,
 }
 
-fn download_and_extract_latest_release_with_version(
-    download_folder: &Path,
-) -> Result<(String, String), String> {
+fn download_and_extract_latest_release(download_folder: &Path) -> Result<String, String> {
     clear_directory(download_folder)?;
 
     let release = fetch_latest_release(LATEST_RELEASE_API_URL)?;
-    let latest_version = release.tag_name.trim().to_string();
-    if latest_version.is_empty() {
-        return Err("latest AIRAC release tag is empty".to_string());
-    }
 
     let download_url = release
         .assets
@@ -373,10 +369,10 @@ fn download_and_extract_latest_release_with_version(
         })?;
     }
 
-    Ok((changelog, latest_version))
+    Ok(changelog)
 }
 
-fn normalize_hash_file_content(content: &str) -> Result<String, String> {
+pub fn normalize_hash_file_content(content: &str) -> Result<String, String> {
     let digest = content
         .lines()
         .map(str::trim)
@@ -413,19 +409,13 @@ pub fn run_get_latest_airac_release_digest() -> Result<AiracReleaseDigest, Strin
     })
 }
 
-fn write_airac_version_file(destination_lixx: &Path, latest_version: &str) -> Result<(), String> {
-    let airac_version_file_path = destination_lixx.join("AIRAC_VERSION.txt");
-    fs::write(
-        &airac_version_file_path,
-        format!("AIRAC {}", latest_version),
-    )
-    .map_err(|error| {
-        format!(
-            "unable to write AIRAC version file '{}': {}",
-            airac_version_file_path.display(),
-            error
-        )
-    })
+/// Reads "AIRAC 2611" style content as written by the VATITA repo, returning "2611".
+pub fn parse_airac_version_file(content: &str) -> Option<String> {
+    content
+        .split_whitespace()
+        .nth(1)
+        .map(str::to_string)
+        .filter(|version| !version.is_empty())
 }
 
 pub fn run_get_latest_airac_changelog() -> Result<String, String> {
@@ -434,14 +424,11 @@ pub fn run_get_latest_airac_changelog() -> Result<String, String> {
 }
 
 pub fn run_get_latest_airac_version() -> Result<String, String> {
-    let release = fetch_latest_release(LATEST_RELEASE_API_URL)?;
-    let version = release.tag_name.trim();
-
-    if version.is_empty() {
-        return Err("latest AIRAC release tag is empty".to_string());
-    }
-
-    Ok(version.to_string())
+    let bytes = download_bytes(MAIN_BRANCH_AIRAC_VERSION_URL)?;
+    let content = String::from_utf8(bytes)
+        .map_err(|error| format!("AIRAC_VERSION.txt is not valid UTF-8: {}", error))?;
+    parse_airac_version_file(&content)
+        .ok_or_else(|| "AIRAC_VERSION.txt on GitHub is empty".to_string())
 }
 
 fn directory_contains_airac_content(path: &Path) -> bool {
@@ -481,7 +468,14 @@ fn remove_existing_sector_files(target_dir: &Path) -> Result<(), String> {
         let entry = entry.map_err(|error| error.to_string())?;
         let file_path = entry.path();
 
+        let is_vatita_file = entry
+            .file_name()
+            .to_string_lossy()
+            .to_ascii_uppercase()
+            .starts_with("LIXX");
+
         if file_path.is_file()
+            && is_vatita_file
             && (extension_is(&file_path, "ese")
                 || extension_is(&file_path, "sct")
                 || extension_is(&file_path, "rwy"))
@@ -577,10 +571,13 @@ pub fn run_update_airac_version(
         );
     }
 
-    let (changelog, latest_version) =
-        download_and_extract_latest_release_with_version(&download_folder)?;
+    let changelog = download_and_extract_latest_release(&download_folder)?;
     let content_root = find_airac_content_root(&download_folder)
         .ok_or_else(|| "downloaded release does not contain AIRAC content".to_string())?;
+    let latest_version = fs::read_to_string(content_root.join("AIRAC_VERSION.txt"))
+        .ok()
+        .and_then(|content| parse_airac_version_file(&content))
+        .ok_or_else(|| "downloaded release does not contain AIRAC_VERSION.txt".to_string())?;
     let release_digest = fetch_main_branch_airac_digest()?;
     log::info!(
         "[AIRAC] Installing release: version={}, release_digest={}",
@@ -590,6 +587,13 @@ pub fn run_update_airac_version(
     inject_imported_sector_files(&imported_sector_folder, &content_root)?;
 
     let euroscope_config_path = PathBuf::from(euroscope_config_dir);
+    fs::create_dir_all(&euroscope_config_path).map_err(|error| {
+        format!(
+            "unable to create '{}': {}",
+            euroscope_config_path.display(),
+            error
+        )
+    })?;
     remove_existing_sector_files(&euroscope_config_path)?;
 
     let downloaded_profile_names: Vec<String> = fs::read_dir(&content_root)
@@ -635,7 +639,6 @@ pub fn run_update_airac_version(
 
     let destination_lixx = euroscope_config_path.join("LIXX");
     copy_release_content(&content_root, &euroscope_config_path, &destination_lixx)?;
-    write_airac_version_file(&destination_lixx, &latest_version)?;
     // Only patch hoppie code when a non-empty code is provided.
     if !hoppie_code.trim().is_empty() {
         patch_hoppie_code(&euroscope_config_path, &hoppie_code)?;
@@ -671,4 +674,32 @@ pub fn run_update_airac_version(
     }
 
     Ok((changelog, latest_version))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn airac_version_file_keeps_github_value() {
+        assert_eq!(parse_airac_version_file("AIRAC 2611\n").as_deref(), Some("2611"));
+        assert_eq!(parse_airac_version_file("AIRAC 2611-01").as_deref(), Some("2611-01"));
+        assert_eq!(parse_airac_version_file(""), None);
+    }
+
+    #[test]
+    fn removes_only_vatita_sector_files() {
+        let dir = env::temp_dir().join("cpm-remove-sector-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for name in ["LIXX-Italy_1.sct", "LIXX-Italy_1.ese", "LHCC-LHCC_1.sct", "italy - TOPSKY.prf"] {
+            fs::write(dir.join(name), "").unwrap();
+        }
+        remove_existing_sector_files(&dir).unwrap();
+        assert!(!dir.join("LIXX-Italy_1.sct").exists());
+        assert!(!dir.join("LIXX-Italy_1.ese").exists());
+        assert!(dir.join("LHCC-LHCC_1.sct").exists());
+        assert!(dir.join("italy - TOPSKY.prf").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

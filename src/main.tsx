@@ -120,8 +120,8 @@ const LoadingScreen = () => (
             <div className="flex items-center gap-3">
                 <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
                 <div>
-                    <h1 className="text-lg font-semibold text-white">Starting Controller Pack Manager</h1>
-                    <p className="mt-1 text-sm text-secondary-400">Checking installed files and update status...</p>
+                    <h1 className="text-lg font-semibold text-secondary-100">Starting Controller Pack Manager</h1>
+                    <p className="mt-1 text-sm text-secondary-400">Checking your installed files and looking for updates…</p>
                 </div>
             </div>
             <div className="h-1 overflow-hidden rounded bg-secondary-600">
@@ -170,20 +170,20 @@ const FolderGate = ({ startupError, onFolderResolved }: FolderGateProps) => {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-secondary-700 px-4 text-secondary-100">
-            <div className="w-full max-w-md rounded-2xl border border-secondary-600 bg-secondary-800/90 p-6 shadow-2xl">
-                <h1 className="text-2xl font-semibold text-white">Where is it?</h1>
+            <div className="w-full max-w-md rounded-md border border-secondary-600 bg-secondary-800/90 p-6">
+                <h1 className="text-2xl font-semibold text-secondary-100">Choose your EuroScope folder</h1>
                 <p className="mt-2 text-sm leading-6 text-secondary-300">
-                    Select the EuroScope folder before the rest of the app loads.
+                    It wasn't found automatically. It's usually AppData\Roaming\EuroScope.
                 </p>
 
                 {startupError && (
-                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+                    <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
                         {startupError}
                     </div>
                 )}
 
                 {actionError && (
-                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+                    <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
                         {actionError}
                     </div>
                 )}
@@ -195,7 +195,7 @@ const FolderGate = ({ startupError, onFolderResolved }: FolderGateProps) => {
                         onClick={pickFolder}
                         disabled={isPickingFolder}
                     >
-                        {isPickingFolder ? "Opening..." : "Choose Folder"}
+                        {isPickingFolder ? "Opening…" : "Choose folder"}
                     </button>
                 </div>
             </div>

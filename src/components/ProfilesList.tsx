@@ -85,13 +85,13 @@ const Accordion = ({
     onToggle: () => void;
     children: React.ReactNode;
 }) => (
-    <div className="overflow-hidden rounded-xl border border-secondary-600 bg-secondary-700/30">
+    <div className="overflow-hidden rounded-md border border-secondary-600 bg-secondary-700/30">
         <button
             type="button"
             onClick={onToggle}
             className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary-700/60"
         >
-            <span className="text-sm font-semibold text-white">{label}</span>
+            <span className="text-sm font-semibold text-secondary-100">{label}</span>
             <span
                 className={`text-lg leading-none text-secondary-500 transition-transform ${
                     isOpen ? "rotate-180" : ""
@@ -165,6 +165,7 @@ export const ProfilesList = ({
                 .map((entry) => {
                     if (entry.meta.isUnsaved) return entry;
                     const updated = incomingMap.get(entry.profile.name);
+                    if (updated === entry.profile) return entry;
                     return updated ? { ...entry, profile: updated } : null;
                 })
                 .filter(Boolean) as ProfileEntry[];
@@ -173,7 +174,10 @@ export const ProfilesList = ({
                     merged.push(profileToEntry(p));
                 }
             }
-            return merged;
+            // Keep identity when nothing changed: entries are echoed to the parent and back,
+            // so a fresh array here re-triggers that round trip forever.
+            const unchanged = merged.length === prev.length && merged.every((entry, i) => entry === prev[i]);
+            return unchanged ? prev : merged;
         });
     }, [profiles]);
 
@@ -209,12 +213,13 @@ export const ProfilesList = ({
         return () => clearTimeout(timer);
     }, [saveSuccess]);
 
-    const notifyParent = useCallback(
-        (updatedEntries: ProfileEntry[]) => {
-            onProfilesUpdate?.(updatedEntries.map((e) => e.profile));
-        },
-        [onProfilesUpdate]
-    );
+    // Ref, not a dependency: the parent recreates this callback on every render,
+    // which would re-run the notify effect below in an endless loop.
+    const onProfilesUpdateRef = useRef(onProfilesUpdate);
+    onProfilesUpdateRef.current = onProfilesUpdate;
+    const notifyParent = useCallback((updatedEntries: ProfileEntry[]) => {
+        onProfilesUpdateRef.current?.(updatedEntries.map((e) => e.profile));
+    }, []);
 
     useEffect(() => {
         if (isSaving) return;
@@ -431,10 +436,10 @@ export const ProfilesList = ({
 
     if (entries.length === 0 || !selectedEntry) {
         return (
-            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md">
+            <section className="rounded-md border border-secondary-600 bg-dark-header">
                 <div className="py-16 text-center">
                     <div className="mb-4 text-4xl opacity-30">📋</div>
-                    <div className="mb-1 text-base font-semibold text-white">No profiles found</div>
+                    <div className="mb-1 text-base font-semibold text-secondary-100">No profiles found</div>
                     <div className="text-sm text-secondary-500">
                         No EuroScope profiles are currently configured.
                     </div>
@@ -445,14 +450,14 @@ export const ProfilesList = ({
 
     return (
         <div className="space-y-6">
-            <section className="rounded-xl border border-secondary-600 bg-dark-header shadow-md overflow-hidden">
+            <section className="rounded-md border border-secondary-600 bg-dark-header overflow-hidden">
 
                 {/* ── status bar ── */}
                 <div className="flex items-center gap-3 border-b border-secondary-600 px-5 py-3.5">
                     <div className={`h-2 w-2 flex-shrink-0 rounded-full ${
                         selectedEntry.meta.isUnsaved ? "bg-accent-warning" : "bg-green-500"
                     }`} />
-                    <span className="flex-1 text-sm font-semibold text-white">
+                    <span className="flex-1 text-sm font-semibold text-secondary-100">
                         {stripPrf(selectedEntry.profile.name)}
                     </span>
                     {saveSuccess && (
@@ -467,7 +472,7 @@ export const ProfilesList = ({
 
                 {/* ── profile tab strip ── */}
                 <div className="border-b border-secondary-600 px-5 py-4">
-                    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-secondary-500">
+                    <span className="text-sm font-semibold text-secondary-400">
                         Profiles
                     </span>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -484,7 +489,7 @@ export const ProfilesList = ({
                                     }}
                                     className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all ${
                                         isActive
-                                            ? "border-primary-600 bg-primary-600 text-white"
+                                            ? "border-primary-600 bg-primary-600 text-secondary-100"
                                             : "border-secondary-600 bg-secondary-700 text-secondary-100 hover:border-secondary-500"
                                     }`}
                                 >
@@ -493,7 +498,7 @@ export const ProfilesList = ({
                                         <span
                                             className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
                                                 isActive
-                                                    ? "bg-white/20 text-white"
+                                                    ? "bg-white/20 text-secondary-100"
                                                     : "bg-accent-warning/30 text-accent-warning"
                                             }`}
                                         >
@@ -519,33 +524,33 @@ export const ProfilesList = ({
                     {/* identity row */}
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <label className="space-y-2">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-secondary-500">
+                            <span className="text-xs font-semibold text-secondary-500">
                                 Profile Name
                             </span>
                             <input
                                 value={fields.profileName}
                                 onChange={(e) => setField("profileName", e.target.value)}
-                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
+                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 outline-none focus:border-primary-600"
                             />
                         </label>
                         <label className="space-y-2">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-secondary-500">
+                            <span className="text-xs font-semibold text-secondary-500">
                                 Real Name
                             </span>
                             <input
                                 value={fields.realName}
                                 onChange={(e) => setField("realName", e.target.value)}
-                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
+                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 outline-none focus:border-primary-600"
                             />
                         </label>
                         <label className="space-y-2">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-secondary-500">
+                            <span className="text-xs font-semibold text-secondary-500">
                                 VATSIM CID
                             </span>
                             <input
                                 value={fields.vatsimCid}
                                 onChange={(e) => setField("vatsimCid", e.target.value)}
-                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
+                                className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 outline-none focus:border-primary-600"
                             />
                         </label>
                     </div>
@@ -608,7 +613,7 @@ export const ProfilesList = ({
                                     <input
                                         value={fields.serverAddress}
                                         onChange={(e) => setField("serverAddress", e.target.value)}
-                                        className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
+                                        className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 outline-none focus:border-primary-600"
                                     />
                                 </label>
                                 <label className="space-y-2">
@@ -619,7 +624,7 @@ export const ProfilesList = ({
                                         placeholder="localhost:8080"
                                         value={fields.proxyServer}
                                         onChange={(e) => setField("proxyServer", e.target.value)}
-                                        className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-white outline-none focus:border-primary-600"
+                                        className="w-full rounded-lg border border-secondary-600 bg-secondary-700 px-3 py-2 text-sm text-secondary-100 outline-none focus:border-primary-600"
                                     />
                                 </label>
                             </div>
@@ -655,7 +660,7 @@ export const ProfilesList = ({
                             onClick={saveCurrentProfile}
                             className={`btn-small ${
                                 saveSuccess
-                                    ? "rounded-xl border border-green-600 bg-green-600 px-4 py-2 font-semibold text-white"
+                                    ? "rounded-md border border-green-600 bg-green-600 px-4 py-2 font-semibold text-secondary-100"
                                     : "btn-primary"
                             } disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
@@ -668,14 +673,14 @@ export const ProfilesList = ({
             {/* ── delete confirmation modal ── */}
             {deleteConfirmation.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-                    <div className="w-96 rounded-xl border border-secondary-600 bg-dark-header shadow-2xl overflow-hidden">
+                    <div className="w-96 rounded-md border border-secondary-600 bg-dark-header overflow-hidden">
                         <div className="border-b border-secondary-600 px-6 py-4">
-                            <h3 className="text-base font-semibold text-white">Delete profile</h3>
+                            <h3 className="text-base font-semibold text-secondary-100">Delete profile</h3>
                         </div>
                         <div className="px-6 py-5">
                             <p className="text-sm text-secondary-300">
                                 Delete{" "}
-                                <span className="font-semibold text-white">
+                                <span className="font-semibold text-secondary-100">
                                     "{deleteConfirmation.profileName}"
                                 </span>
                                 ? This cannot be undone.
@@ -694,7 +699,7 @@ export const ProfilesList = ({
                             <button
                                 type="button"
                                 onClick={confirmDelete}
-                                className="btn-small rounded-xl bg-accent-danger px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                                className="btn-small rounded-md bg-accent-danger px-4 py-2 text-sm font-semibold text-secondary-100 transition-opacity hover:opacity-90"
                             >
                                 Delete
                             </button>

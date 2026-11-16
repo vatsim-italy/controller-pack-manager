@@ -12,37 +12,37 @@ export const ListConfigCard = ({ config }: ListConfigCardProps) => {
     const orderedByColumnId = config.columns[oneBasedIndex]?.values?.[0] ?? "Unknown";
 
     return (
-        <article className="rounded-xl border border-secondary-600 bg-dark-header p-4 shadow-md">
+        <article className="rounded-md border border-secondary-600 bg-dark-header p-4">
             <div className="flex items-start justify-between gap-3 border-b border-secondary-600 pb-3">
                 <div>
-                    <h3 className="text-lg font-semibold text-white">{config.id}</h3>
+                    <h3 className="text-lg font-semibold text-secondary-100">{config.id}</h3>
                 </div>
-                <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary-100">
+                <span className="rounded border border-primary-600 bg-primary-600/20 px-2.5 py-1 text-xs font-bold text-primary-100">
                     Ordered by: {orderedByColumnId}
                 </span>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-secondary-100 md:grid-cols-4">
                 <div>
-                    <div className="text-xs uppercase tracking-wider text-secondary-500">Visible</div>
-                    <div className="mt-1 font-semibold text-white">{config.visible ? "Yes" : "No"}</div>
+                    <div className="text-xs text-secondary-500">Visible</div>
+                    <div className="mt-1 font-semibold text-secondary-100">{config.visible ? "Yes" : "No"}</div>
                 </div>
                 <div>
-                    <div className="text-xs uppercase tracking-wider text-secondary-500">Header Only</div>
-                    <div className="mt-1 font-semibold text-white">{config.header_only ? "Yes" : "No"}</div>
+                    <div className="text-xs text-secondary-500">Header Only</div>
+                    <div className="mt-1 font-semibold text-secondary-100">{config.header_only ? "Yes" : "No"}</div>
                 </div>
                 <div>
-                    <div className="text-xs uppercase tracking-wider text-secondary-500">Position</div>
-                    <div className="mt-1 font-semibold text-white">X {config.x} • Y {config.y}</div>
+                    <div className="text-xs text-secondary-500">Position</div>
+                    <div className="mt-1 font-semibold text-secondary-100">X {config.x} • Y {config.y}</div>
                 </div>
                 <div>
-                    <div className="text-xs uppercase tracking-wider text-secondary-500">Resizable</div>
-                    <div className="mt-1 font-semibold text-white">{config.resizable ? "Yes" : "No"}</div>
+                    <div className="text-xs text-secondary-500">Resizable</div>
+                    <div className="mt-1 font-semibold text-secondary-100">{config.resizable ? "Yes" : "No"}</div>
                 </div>
             </div>
 
             <div className="mt-4">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-secondary-500">Columns</div>
+                <div className="mb-2 text-xs font-semibold text-secondary-500">Columns</div>
                 <div className="flex flex-wrap gap-2">
                     {config.columns.length > 0 ? (
                         config.columns.map((column, index) => (

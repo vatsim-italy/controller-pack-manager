@@ -33,10 +33,10 @@ export const BooleanListCard = ({
     return (
         <div
             style={style}
-            className="rounded-lg border border-primary-600 bg-dark-header p-3 shadow-lg min-w-fit"
+            className="rounded-lg border border-primary-600 bg-dark-header p-3 min-w-fit"
         >
             <div className="mb-3 border-b border-secondary-600 pb-2">
-                <h3 className="text-sm font-semibold text-white">{id}</h3>
+                <h3 className="text-sm font-semibold text-secondary-100">{id}</h3>
             </div>
 
             <div className="space-y-2">

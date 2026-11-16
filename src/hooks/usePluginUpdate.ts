@@ -206,17 +206,17 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     setIsLoadingReleases(true);
 
     try {
-      const { devOptIn, installedVer } = await refreshSettings();
+      // Re-hash the local DLL, then compare against the freshly fetched release SHA.
+      const { devOptIn } = await refreshSettings();
       await fetchReleasesWithFlags(devOptIn, true);
-      const computed = computeAvailableVersion(pluginCache.releases, installedVer, devOptIn);
-      setAvailableVersion(computed);
+      await refreshAvailableVersion();
     } catch (error) {
       setUpdateError(normalizeError(error));
     } finally {
       setIsLoadingReleases(false);
       setLastCheckedAt(new Date());
     }
-  }, [fetchReleasesWithFlags, computeAvailableVersion, refreshSettings]);
+  }, [fetchReleasesWithFlags, refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     if (!enabled) {
@@ -228,10 +228,9 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     const loadSettings = async () => {
       setIsLoadingSettings(true);
       try {
-        const { devOptIn, installedVer } = await refreshSettings();
+        const { devOptIn } = await refreshSettings();
         await fetchReleasesWithFlags(devOptIn, false);
-        const computed = computeAvailableVersion(pluginCache.releases, installedVer, devOptIn);
-        setAvailableVersion(computed);
+        await refreshAvailableVersion();
       } catch (error) {
         setUpdateError(normalizeError(error));
       } finally {
@@ -241,7 +240,7 @@ export const usePluginUpdate = (enabled = true): PluginUpdateState => {
     };
 
     void loadSettings();
-  }, [enabled, fetchReleasesWithFlags, computeAvailableVersion, refreshSettings]);
+  }, [enabled, fetchReleasesWithFlags, refreshAvailableVersion, refreshSettings]);
 
   useEffect(() => {
     if (!enabled || !settingsReady) {

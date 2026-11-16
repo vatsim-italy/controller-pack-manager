@@ -35,6 +35,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_detected_euroscope_config_dir,
             get_detected_installed_airac_version,
+            refresh_detected_installed_airac_version,
             is_new_airac_version_available,
             refresh_airac_update_status,
             get_existing_profiles,

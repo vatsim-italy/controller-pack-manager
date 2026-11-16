@@ -39,12 +39,12 @@ export const InstallWarningModal: React.FC<InstallWarningModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border border-secondary-600 bg-dark-header shadow-2xl overflow-hidden">
+      <div className="w-full max-w-md rounded-md border border-secondary-600 bg-dark-header overflow-hidden">
         <div className="border-b border-secondary-600 px-6 py-4 flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500/20 text-accent-warning">
             ⚠️
           </div>
-          <h3 className="text-base font-semibold text-white">Warning</h3>
+          <h3 className="text-base font-semibold text-secondary-100">Warning</h3>
         </div>
         <div className="px-6 py-5">
           <p className="text-sm font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
@@ -62,7 +62,7 @@ export const InstallWarningModal: React.FC<InstallWarningModalProps> = ({
           <button
             type="button"
             onClick={handleProceed}
-            className="btn-small rounded-xl bg-accent-warning px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+            className="btn-small rounded-md bg-accent-warning px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90"
           >
             Proceed
           </button>
