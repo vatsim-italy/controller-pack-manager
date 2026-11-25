@@ -35,7 +35,7 @@ pub struct PluginVersionHistory {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct PluginApiResponse {
     pub dev: Option<PluginRelease>,
-    pub latest: PluginRelease,
+    pub latest: Option<PluginRelease>,
     pub history: Vec<PluginVersionHistory>,
 }
 
@@ -46,12 +46,32 @@ fn fetch_releases() -> Result<PluginApiResponse, String> {
         .build()
         .map_err(|error| format!("unable to create http client: {}", error))?;
 
-    client
+    let response = client
         .get(RELEASES_API_URL)
+        .header(reqwest::header::ACCEPT, "application/json")
         .send()
-        .map_err(|error| format!("releases list request failed: {}", error))?
-        .json::<PluginApiResponse>()
-        .map_err(|error| format!("unable to parse releases list payload: {}", error))
+        .map_err(|error| format!("releases list request failed: {}", error))?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|error| format!("unable to read releases list body: {}", error))?;
+
+    let preview: String = body.chars().take(200).collect();
+
+    if !status.is_success() {
+        return Err(format!(
+            "releases list returned HTTP {}: {}",
+            status, preview
+        ));
+    }
+
+    serde_json::from_str::<PluginApiResponse>(&body).map_err(|error| {
+        format!(
+            "unable to parse releases list payload: {} (body starts with: {})",
+            error, preview
+        )
+    })
 }
 
 fn pack_dir() -> Result<PathBuf, String> {
@@ -73,7 +93,7 @@ fn select_release(dev_releases_opt_in: bool) -> Result<PluginRelease, String> {
     let release = if dev_releases_opt_in {
         response.dev.ok_or_else(|| "no dev release is currently available".to_string())?
     } else {
-        response.latest
+        response.latest.ok_or_else(|| "no stable release is currently available".to_string())?
     };
 
     if find_release_asset(&release).is_some() {
@@ -169,13 +189,15 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
         );
     }
 
-    for a in &releases.latest.artifacts {
-        if let Some(d) = &a.digest {
-            let is_match = digests_match(d, &calculated_digest);
-            log::info!(
-                "[Plugin]   Comparing against latest artifact: name='{}', title='{}', digest='{}' -> match={}",
-                a.name, releases.latest.title, d, is_match
-            );
+    if let Some(latest) = releases.latest.as_ref() {
+        for a in &latest.artifacts {
+            if let Some(d) = &a.digest {
+                let is_match = digests_match(d, &calculated_digest);
+                log::info!(
+                    "[Plugin]   Comparing against latest artifact: name='{}', title='{}', digest='{}' -> match={}",
+                    a.name, latest.title, d, is_match
+                );
+            }
         }
     }
 
@@ -195,8 +217,10 @@ pub fn get_installed_plugin_version() -> Result<Option<String>, String> {
         .find(|h| digests_match(&h.digest, &calculated_digest))
         .map(|h| h.name.clone())
         .or_else(|| {
-            if releases.latest.artifacts.iter().any(|a| a.digest.as_ref().is_some_and(|d| digests_match(d, &calculated_digest))) {
-                return Some(releases.latest.title.clone());
+            if let Some(latest) = releases.latest.as_ref() {
+                if latest.artifacts.iter().any(|a| a.digest.as_ref().is_some_and(|d| digests_match(d, &calculated_digest))) {
+                    return Some(latest.title.clone());
+                }
             }
             if let Some(dev) = releases.dev.as_ref() {
                 if dev.artifacts.iter().any(|a| a.digest.as_ref().is_some_and(|d| digests_match(d, &calculated_digest))) {
