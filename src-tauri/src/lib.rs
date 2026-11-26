@@ -40,6 +40,7 @@ pub fn run() {
             refresh_airac_update_status,
             get_existing_profiles,
             get_hoppie_code,
+            get_legacy_hoppie_code,
             update_hoppie_code,
             has_imported_airac_sector_files,
             import_airac_sector_zip,

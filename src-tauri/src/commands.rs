@@ -194,6 +194,21 @@ pub fn get_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<Strin
     Ok(lock.clone())
 }
 
+/// Returns the old TopSky code only when VCP settings has none, so the UI can offer to import it.
+#[tauri::command]
+pub fn get_legacy_hoppie_code(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    if state
+        .hoppie_code
+        .lock()
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Ok(None);
+    }
+    Ok(AppState::resolve_euroscope_config_folder()
+        .and_then(|dir| crate::topsky::read_legacy_topsky_hoppie_code(std::path::Path::new(&dir))))
+}
+
 #[tauri::command]
 pub async fn update_hoppie_code(
     hoppie_code: String,

@@ -197,22 +197,7 @@ impl AppState {
     }
 
     fn parse_hoppie_code(euroscope_config_dir: &str) -> Option<String> {
-        let preferred_path = PathBuf::from(euroscope_config_dir)
-            .join("Plugins")
-            .join("Topsky")
-            .join("TopSkyCPDLCHoppieCode.txt");
-
-        if let Ok(code) = fs::read_to_string(&preferred_path) {
-            return Some(code);
-        }
-
-        let legacy_path = PathBuf::from(euroscope_config_dir)
-            .join("LIXX")
-            .join("Plugins")
-            .join("Topsky")
-            .join("TopSkyCPDLCHoppieCode.txt");
-
-        fs::read_to_string(legacy_path).ok()
+        crate::topsky::read_hoppie_code(Path::new(euroscope_config_dir))
     }
 
     fn parse_list_configs(euroscope_config_dir: &str) -> Option<Vec<ListConfig>> {
