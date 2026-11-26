@@ -29,12 +29,21 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
     const [updateSuccess, setUpdateSuccess] = useState(false);
     const [isCodeVisible, setIsCodeVisible] = useState(false);
 
+    const [legacyCode, setLegacyCode] = useState<string | null>(null);
+    const [hasSavedCode, setHasSavedCode] = useState(!!hoppieCode);
+
     useEffect(() => {
         setCodeInput(hoppieCode ?? "");
+        setHasSavedCode(!!hoppieCode);
+        if (!hoppieCode) {
+            invoke<string | null>("get_legacy_hoppie_code")
+                .then(setLegacyCode)
+                .catch(() => setLegacyCode(null));
+        }
     }, [hoppieCode]);
 
-    const handleUpdateHoppieCode = async () => {
-        const normalized = codeInput.trim();
+    const handleUpdateHoppieCode = async (code: string = codeInput) => {
+        const normalized = code.trim();
         if (!normalized) {
             setUpdateError("Hoppie code cannot be empty.");
             return;
@@ -46,6 +55,9 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
 
         try {
             await invoke("update_hoppie_code", { hoppieCode: normalized });
+            setCodeInput(normalized);
+            setHasSavedCode(true);
+            setLegacyCode(null);
             setUpdateSuccess(true);
             setTimeout(() => setUpdateSuccess(false), 2500);
         } catch (error) {
@@ -63,11 +75,32 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
                     Hoppie logon code
                 </label>
                 <p className="text-sm text-secondary-400">
-                    {hoppieCode
-                        ? "Saved in your TopSky settings."
+                    {hasSavedCode
+                        ? "Saved in your VCP plugin settings."
                         : "No code found. Get one at hoppie.nl, then save it here."}
                 </p>
             </div>
+
+            {legacyCode && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[3px] border border-secondary-600 bg-secondary-800 px-3 py-2">
+                    <p className="text-sm text-secondary-200">
+                        Found a Hoppie code in your old TopSky settings. Import it into the VCP plugin?
+                    </p>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            className="btn-primary btn-small"
+                            onClick={() => handleUpdateHoppieCode(legacyCode)}
+                            disabled={isUpdatingCode}
+                        >
+                            Import
+                        </button>
+                        <button type="button" className="btn-secondary btn-small" onClick={() => setLegacyCode(null)}>
+                            Not now
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex min-w-[16rem] flex-1 items-center rounded-[3px] border border-secondary-600 bg-secondary-800 focus-within:border-secondary-500">
@@ -93,7 +126,7 @@ export const HoppieSection = ({ hoppieCode }: HoppieSectionProps) => {
                 <button
                     type="button"
                     className="btn-primary btn-small"
-                    onClick={handleUpdateHoppieCode}
+                    onClick={() => handleUpdateHoppieCode()}
                     disabled={isUpdatingCode}
                 >
                     {isUpdatingCode ? "Saving…" : updateSuccess ? "Saved" : "Save code"}
