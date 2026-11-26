@@ -51,7 +51,12 @@ pub fn fetch_latest_release(api_url: &str) -> Result<GitHubRelease, String> {
 }
 
 pub fn download_bytes(download_url: &str) -> Result<Vec<u8>, String> {
-    let client = build_http_client()?;
+    // The 30s total timeout of build_http_client also covers body reads and cuts large zips mid-download.
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(600))
+        .build()
+        .map_err(|error| format!("unable to create http client: {}", error))?;
     let request = client.get(download_url);
 
     apply_github_headers(request)
