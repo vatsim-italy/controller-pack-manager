@@ -185,12 +185,17 @@ impl AppState {
         Some(
             existing_profiles
                 .iter()
-                .map(|profile_path| {
-                    let profile_content = std::fs::read_to_string(
-                        PathBuf::from(euroscope_config_dir).join(profile_path),
-                    )
-                    .expect("we checked before that this file exists");
-                    Profile::parse(profile_path, profile_content)
+                .filter_map(|profile_path| {
+                    // EuroScope writes .prf files in ANSI, so accented names aren't valid UTF-8.
+                    let bytes = match fs::read(PathBuf::from(euroscope_config_dir).join(profile_path)) {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            log::warn!("unable to read profile '{}': {}", profile_path, error);
+                            return None;
+                        }
+                    };
+                    let profile_content = String::from_utf8_lossy(&bytes).into_owned();
+                    Some(Profile::parse(profile_path, profile_content))
                 })
                 .collect(),
         )
